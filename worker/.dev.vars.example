@@ -1,0 +1,6 @@
+# Copy to worker/.dev.vars for `wrangler dev` (this file is gitignored).
+# Must match extra.reminderWorkerSecret in ../app.json.
+REGISTRATION_SECRET="generate-a-long-random-string"
+
+# Only needed if you enable push security on expo.dev.
+# EXPO_ACCESS_TOKEN="..."

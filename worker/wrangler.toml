@@ -1,0 +1,23 @@
+name = "mood-tracker-reminders"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+# Fires hourly. The Worker checks the wall-clock hour in REMINDER_TIMEZONE and
+# only sends on the hours listed in REMINDER_HOURS, so reminders stay at the same
+# local time through daylight-saving changes.
+[triggers]
+crons = ["0 * * * *"]
+
+[vars]
+# Change these two to your timezone and preferred times.
+REMINDER_TIMEZONE = "America/Toronto"
+REMINDER_HOURS = "9,14,20"
+
+# Create with:  npx wrangler kv namespace create TOKENS
+# then paste the returned id below.
+[[kv_namespaces]]
+binding = "TOKENS"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+[observability]
+enabled = true
