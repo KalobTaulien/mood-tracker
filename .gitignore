@@ -39,3 +39,23 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Cloudflare Worker
+worker/node_modules/
+worker/.wrangler/
+worker/.dev.vars
+
+# Local secrets / env
+.env
+.env.local
+
+# Editors
+.idea/
+.vscode/
+*.swp
+
+# Expo router generated types
+/.expo/types
+
+# Project-local Expo access token (personal account)
+.env.eas

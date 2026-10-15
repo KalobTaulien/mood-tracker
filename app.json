@@ -1,17 +1,23 @@
 {
   "expo": {
-    "name": "MoodTrackingApp",
-    "slug": "MoodTrackingApp",
+    "name": "Mood Tracker",
+    "slug": "mood-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "scheme": "moodtracker",
+    "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "com.kalobtaulien.moodtracker",
+      "supportsTablet": false,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "com.kalobtaulien.moodtracker",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#5B6CFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -20,6 +26,51 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-notifications",
+        {
+          "color": "#5B6CFF",
+          "defaultChannel": "mood-reminders",
+          "enableRemoteNotifications": true
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "backgroundColor": "#F7F7FB",
+          "dark": {
+            "backgroundColor": "#0E0E14"
+          }
+        }
+      ],
+      "expo-font"
+    ],
+    "extra": {
+      "reminderWorkerUrl": "",
+      "reminderWorkerSecret": "",
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "7c62e2dc-e653-4c91-a7ea-739ea3b4a53c"
+      }
+    },
+    "owner": "kalobtaulien",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/7c62e2dc-e653-4c91-a7ea-739ea3b4a53c"
     }
   }
 }
