@@ -1,7 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 export const DATABASE_NAME = 'mood-tracker.db';
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 
 /**
  * Runs on every app start via SQLiteProvider's `onInit`.
@@ -40,6 +40,16 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
       );
     `);
     currentDbVersion = 1;
+  }
+
+  if (currentDbVersion === 1) {
+    // Reminders are scheduled on-device now, so the Expo push token kept for
+    // the old Cloudflare Worker has no reader left.
+    await db.execAsync(`
+      DELETE FROM settings
+       WHERE key IN ('push_token', 'push_token_registered_at');
+    `);
+    currentDbVersion = 2;
   }
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);

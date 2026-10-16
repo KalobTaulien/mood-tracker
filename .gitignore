@@ -40,11 +40,6 @@ yarn-error.*
 /ios
 /android
 
-# Cloudflare Worker
-worker/node_modules/
-worker/.wrangler/
-worker/.dev.vars
-
 # Local secrets / env
 .env
 .env.local

@@ -1,8 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 export const SETTING_KEYS = {
-  pushToken: 'push_token',
-  pushTokenRegisteredAt: 'push_token_registered_at',
   localRemindersEnabled: 'local_reminders_enabled',
 } as const;
 

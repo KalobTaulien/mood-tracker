@@ -1,9 +1,8 @@
 # Mood Tracker
 
 A private iOS mood journal built with Expo. All data lives in a local SQLite
-database on the device — nothing is sent to a cloud database. The only network
-call is an optional push-notification registration to a Cloudflare Worker that
-reminds you to log three times a day.
+database on the device, and the app makes no network calls at all — reminders are
+scheduled on-device by the OS, so there is no server and no account.
 
 ## What it does
 
@@ -18,8 +17,8 @@ reminds you to log three times a day.
 - **Trends** — mood and fatigue daily averages charted over the last 7, 14, 30,
   or 60 days, read straight from the local database, plus summary stats and a
   habit breakdown for the window.
-- **Reminders** — three notifications a day saying "Track your mood"; tapping
-  one opens the log screen.
+- **Reminders** — three on-device notifications a day titled "Track your mood",
+  with the wording varying by time of day; tapping one opens the log screen.
 
 ## Stack
 
@@ -29,7 +28,7 @@ reminds you to log three times a day.
 | Navigation | `expo-router` (file-based, tabs + stack) |
 | Database | `expo-sqlite` (on-device, WAL mode, versioned migrations) |
 | Charts | `react-native-svg` (hand-rolled line chart, no chart dependency) |
-| Notifications | `expo-notifications` + a Cloudflare Worker cron trigger |
+| Notifications | `expo-notifications`, scheduled on-device (no server) |
 | Language | TypeScript, strict mode |
 
 ## Running it
@@ -73,7 +72,6 @@ src/
   components/              Card, ScoreSlider, DateTimeField, MoodChart, …
   lib/                     dates, stats aggregation, mood words, notifications
   theme.ts                 light/dark palettes and spacing tokens
-worker/                    Cloudflare Worker + cron trigger
 ```
 
 ## Data model
@@ -103,47 +101,37 @@ new `if (currentDbVersion === n)` block.
 
 ## Reminders
 
-There are two independent paths, and both are on by default.
+Reminders are scheduled entirely on-device — no server, no push token, no
+account. They work offline and in the Simulator. Everything lives in
+`src/lib/notifications.ts`.
 
-**1. On-device scheduled notifications.** The app schedules three repeating
-daily notifications itself (9:00, 14:00, 20:00 local — see `REMINDER_TIMES` in
-`src/lib/notifications.ts`). These need no server, work offline, and work in the
-Simulator. For most single-user setups this alone is enough.
+Three fire per day at 9:00, 14:00, and 20:00 local time (`REMINDER_TIMES`). The
+title is always "Track your mood"; the body is drawn from a per-slot rotation
+(`REMINDER_BODIES`) keyed on the calendar date, so a morning nudge reads
+differently from an evening one and consecutive days do not repeat themselves.
 
-**2. Cloudflare Worker cron push.** See `worker/README.md`. The Worker holds
-your Expo push token in KV and asks Expo's push service to deliver the same
-reminder. This is the path you asked for; it needs an EAS project ID and a
-dev-client or TestFlight build.
+### Why sixty, and why it is topped up
+
+iOS keeps at most **64 pending notifications per app** and silently drops the
+rest, so the app schedules `MAX_SCHEDULED_REMINDERS = 60` individually dated
+notifications and leaves the remaining slots free. At three a day that is a
+**twenty-day runway**.
+
+Because each one is a specific date rather than a repeating trigger, the queue
+drains as reminders fire. `NotificationBootstrap` calls `scheduleLocalReminders()`
+on every app launch to refill it, which pushes the twenty-day window forward.
+The rebuild is skipped when the queue is already full, so launching the app
+repeatedly in one day does no redundant work.
+
+> **The trade-off:** if the app is never opened for twenty days, the queue
+> empties and reminders stop until it is opened again. A repeating daily trigger
+> would never expire but could not vary its wording. Rotating copy was the
+> priority here; if you would rather have reminders that never lapse, swap the
+> `DATE` triggers in `scheduleLocalReminders()` for three `DAILY` ones.
 
 The **Reminders** screen (bell icon on the Log screen) shows permission state,
-your push token, Worker registration status, and a "send a test reminder"
-button.
-
-### Enabling the Cloudflare path
-
-1. Deploy the Worker (`worker/README.md`) and note its URL.
-2. Create an EAS project so a push token can be issued:
-   ```bash
-   npx eas init
-   ```
-   This writes `extra.eas.projectId` into `app.json`.
-3. Put the Worker URL and the shared secret into `app.json`:
-   ```json
-   "extra": {
-     "reminderWorkerUrl": "https://mood-tracker-reminders.<you>.workers.dev",
-     "reminderWorkerSecret": "the-same-secret-you-set-on-the-worker"
-   }
-   ```
-4. Rebuild (`npm run ios`), open **Reminders**, and tap **Get token &
-   register**.
-
-Remote push does not work in Expo Go on iOS — a development build (what
-`npm run ios` produces) or a TestFlight build is required. Remote push *does*
-work on the iOS Simulator with Xcode 14+.
-
-> `reminderWorkerSecret` ships inside the app bundle. That is acceptable here
-> because the secret only guards "add a device token to my own reminder list"
-> on a single-user app. Do not reuse it for anything else.
+how many reminders are queued and how far ahead they reach, and a "send a test
+reminder" button that fires one three seconds later.
 
 ## Using your personal Expo account (not `caitcommittee`)
 
@@ -199,8 +187,8 @@ npm run eas -- init
 ```
 
 This registers the project under your personal account and writes
-`extra.eas.projectId` into `app.json` — which is also what
-`expo-notifications` needs to issue a push token (see
+`extra.eas.projectId` into `app.json`, which EAS uses to identify the project.
+Reminders do not need it — they are scheduled on-device (see
 [Reminders](#reminders)).
 
 ### Build profiles
@@ -247,10 +235,10 @@ encryption question on every upload.
 
 ## Privacy
 
-Entries never leave the device. The database file sits in the app's private
-container and is included in encrypted iPhone backups. The only thing the
-Cloudflare Worker ever receives is an opaque Expo push token — never any mood
-data. Uninstalling the app deletes the database.
+Entries never leave the device. The app makes no network calls and has no
+server component, so there is nothing to receive your data. The database file
+sits in the app's private container and is included in encrypted iPhone backups.
+Uninstalling the app deletes the database.
 
 If you want a copy of your data, `logs` is a plain SQLite table; pull the
 database out of the app container with Xcode's Devices window, or add an export

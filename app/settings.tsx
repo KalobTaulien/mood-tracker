@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import Constants from 'expo-constants';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -16,9 +15,7 @@ import { getSetting, SETTING_KEYS, setSetting } from '@/db';
 import {
   cancelLocalReminders,
   countLocalReminders,
-  fetchExpoPushToken,
   REMINDER_TIMES,
-  registerTokenWithWorker,
   requestPermissions,
   scheduleLocalReminders,
   sendTestNotification,
@@ -38,23 +35,14 @@ export default function SettingsScreen() {
   const [permission, setPermission] = useState<boolean | null>(null);
   const [localEnabled, setLocalEnabled] = useState(true);
   const [scheduledCount, setScheduledCount] = useState(0);
-  const [pushToken, setPushToken] = useState<string | null>(null);
-  const [pushError, setPushError] = useState<string | null>(null);
-  const [registerState, setRegisterState] = useState<'idle' | 'working' | 'ok' | 'failed'>(
-    'idle'
-  );
   const [testSent, setTestSent] = useState(false);
 
-  const workerUrl = (Constants.expoConfig?.extra?.reminderWorkerUrl as string) || '';
-
   const refresh = useCallback(async () => {
-    const [count, storedToken, enabledSetting] = await Promise.all([
+    const [count, enabledSetting] = await Promise.all([
       countLocalReminders(),
-      getSetting(db, SETTING_KEYS.pushToken),
       getSetting(db, SETTING_KEYS.localRemindersEnabled),
     ]);
     setScheduledCount(count);
-    setPushToken(storedToken);
     setLocalEnabled(enabledSetting !== '0');
   }, [db]);
 
@@ -69,7 +57,8 @@ export default function SettingsScreen() {
       if (next) {
         const granted = await requestPermissions();
         setPermission(granted);
-        if (granted) await scheduleLocalReminders();
+        // Force a rebuild: switching back on should refill the queue right away.
+        if (granted) await scheduleLocalReminders({ force: true });
       } else {
         await cancelLocalReminders();
       }
@@ -77,32 +66,6 @@ export default function SettingsScreen() {
     },
     [db, refresh]
   );
-
-  const onGetToken = useCallback(async () => {
-    setRegisterState('working');
-    const granted = await requestPermissions();
-    setPermission(granted);
-    if (!granted) {
-      setRegisterState('failed');
-      setPushError('Notification permission denied.');
-      return;
-    }
-    const { token, error } = await fetchExpoPushToken();
-    setPushToken(token);
-    setPushError(error);
-    if (!token) {
-      setRegisterState('failed');
-      return;
-    }
-    await setSetting(db, SETTING_KEYS.pushToken, token);
-    if (!workerUrl) {
-      setRegisterState('idle');
-      return;
-    }
-    const ok = await registerTokenWithWorker(token);
-    if (ok) await setSetting(db, SETTING_KEYS.pushTokenRegisteredAt, new Date().toISOString());
-    setRegisterState(ok ? 'ok' : 'failed');
-  }, [db, workerUrl]);
 
   const onTest = useCallback(async () => {
     const granted = await requestPermissions();
@@ -113,13 +76,15 @@ export default function SettingsScreen() {
     setTimeout(() => setTestSent(false), 4000);
   }, []);
 
+  const daysOfCoverage = Math.ceil(scheduledCount / REMINDER_TIMES.length);
+
   return (
     <ScrollView
       style={{ backgroundColor: palette.bg }}
       contentContainerStyle={styles.content}>
       <Card
         title="On-device reminders"
-        subtitle="Scheduled by the app itself. Works offline and needs no server."
+        subtitle="Scheduled by the app itself. Works offline and needs no server or account."
         trailing={
           <Switch
             value={localEnabled}
@@ -141,50 +106,9 @@ export default function SettingsScreen() {
         </View>
         <Text style={[styles.note, { color: palette.textFaint }]}>
           {scheduledCount > 0
-            ? `${scheduledCount} daily reminder${scheduledCount === 1 ? '' : 's'} currently scheduled.`
+            ? `${scheduledCount} reminders queued — about ${daysOfCoverage} days ahead. ` +
+              'Opening the app extends the queue.'
             : 'No reminders scheduled right now.'}
-        </Text>
-      </Card>
-
-      <Card
-        title="Cloudflare push reminders"
-        subtitle="A Worker cron trigger fires the same three reminders through Expo's push service.">
-        <Row
-          label="Worker URL"
-          value={workerUrl || 'Not configured'}
-          ok={!!workerUrl}
-        />
-        <Row
-          label="Push token"
-          value={pushToken ? `${pushToken.slice(0, 26)}…` : 'Not obtained'}
-          ok={!!pushToken}
-        />
-        {!!pushError && (
-          <Text style={[styles.error, { color: palette.danger }]}>{pushError}</Text>
-        )}
-        <Pressable
-          onPress={onGetToken}
-          disabled={registerState === 'working'}
-          style={({ pressed }) => [
-            styles.button,
-            { backgroundColor: palette.accent, opacity: pressed ? 0.85 : 1 },
-          ]}>
-          <Text style={styles.buttonText}>
-            {registerState === 'working'
-              ? 'Working…'
-              : registerState === 'ok'
-                ? 'Registered with Worker ✓'
-                : 'Get token & register'}
-          </Text>
-        </Pressable>
-        {registerState === 'failed' && (
-          <Text style={[styles.error, { color: palette.danger }]}>
-            Could not register. Check the Worker URL and secret in app.json.
-          </Text>
-        )}
-        <Text style={[styles.note, { color: palette.textFaint }]}>
-          Remote push needs a development or TestFlight build — it does not work in Expo
-          Go on iOS.
         </Text>
       </Card>
 
@@ -250,7 +174,6 @@ const styles = StyleSheet.create({
   },
   timeText: { fontSize: 13.5, fontWeight: '600' },
   note: { fontSize: 12, lineHeight: 17 },
-  error: { fontSize: 12.5, lineHeight: 17 },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   rowLabel: { fontSize: 13.5, width: 94 },
   rowValue: { fontSize: 13.5, fontWeight: '600', flex: 1 },

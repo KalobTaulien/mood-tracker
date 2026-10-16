@@ -13,7 +13,6 @@
     "**/*.tsx"
   ],
   "exclude": [
-    "node_modules",
-    "worker"
+    "node_modules"
   ]
 }

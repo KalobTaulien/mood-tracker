@@ -42,8 +42,6 @@
     "ios:device": "expo run:ios --device",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
-    "worker:dev": "npm --prefix worker run dev",
-    "worker:deploy": "npm --prefix worker run deploy",
     "eas": "sh scripts/eas.sh"
   },
   "private": true
