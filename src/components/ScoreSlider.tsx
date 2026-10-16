@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   LayoutChangeEvent,
   PanResponder,
@@ -66,24 +66,34 @@ export function ScoreSlider({ value, onChange, tint, caption, minLabel, maxLabel
     [width, travel]
   );
 
-  const responder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: (e) => {
-          lastEmitted.current = null;
-          grantX.current = e.nativeEvent.locationX;
-          emit(valueFromX(grantX.current));
-        },
-        onPanResponderMove: (_e, gesture) => {
-          // locationX drifts to whichever subview is under the finger mid-drag,
-          // so track from the grant point plus total travel instead.
-          emit(valueFromX(grantX.current + gesture.dx));
-        },
-      }),
-    [emit, valueFromX]
-  );
+  // Callers pass an inline onChange, so emit/valueFromX get new identities on
+  // every render. The PanResponder must NOT be rebuilt from them: replacing it
+  // mid-drag hands the in-flight touch a fresh gestureState that never saw the
+  // grant, so gesture.dx stays 0 and the value sticks at the grant point.
+  // Keep the instance permanent and read the current logic through this ref.
+  const latest = useRef({ emit, valueFromX });
+  latest.current = { emit, valueFromX };
+
+  const responderRef = useRef<ReturnType<typeof PanResponder.create> | null>(null);
+  if (responderRef.current === null) {
+    responderRef.current = PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      // The form is a ScrollView; don't let it steal a drag already in progress.
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: (e) => {
+        lastEmitted.current = null;
+        grantX.current = e.nativeEvent.locationX;
+        latest.current.emit(latest.current.valueFromX(grantX.current));
+      },
+      onPanResponderMove: (_e, gesture) => {
+        // locationX drifts to whichever subview is under the finger mid-drag,
+        // so track from the grant point plus total travel instead.
+        latest.current.emit(latest.current.valueFromX(grantX.current + gesture.dx));
+      },
+    });
+  }
+  const responder = responderRef.current;
 
   const hasValue = value !== null;
   const ratio = hasValue ? value / (STEPS - 1) : 0;
