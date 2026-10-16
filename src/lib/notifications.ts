@@ -1,43 +1,48 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-
-/** Local times the reminder fires each day. */
-export const REMINDER_TIMES = [
-  { hour: 9, minute: 0 },
-  { hour: 14, minute: 0 },
-  { hour: 20, minute: 0 },
-] as const;
+import {
+  serializeReminderTimes,
+  sortReminderTimes,
+  type ReminderTime,
+} from './reminderTimes';
 
 export const REMINDER_TITLE = 'Track your mood';
 
 /**
- * Body copy per time slot, indexed to match REMINDER_TIMES. Each occurrence
- * picks a line by calendar date, so consecutive days read differently instead
- * of repeating one sentence sixty times.
+ * Body copy pools. Each occurrence picks a line by calendar date, so
+ * consecutive days read differently instead of repeating one sentence sixty
+ * times. Pools are keyed by time of day rather than by position in the
+ * configured list, so re-timing a reminder keeps its wording appropriate.
  */
-const REMINDER_BODIES: readonly (readonly string[])[] = [
-  [
+const REMINDER_BODIES = {
+  morning: [
     'A quick check-in — it only takes a moment.',
     'How are you starting the day?',
     'Morning. Where is your head at?',
     'Take a second to note how you feel.',
     'A fresh day — how does it feel so far?',
   ],
-  [
+  afternoon: [
     "How's the afternoon treating you?",
     'Midday check-in — how are you doing?',
     'Pause for a moment. How do you feel?',
     'Halfway through. How is today going?',
     'A quick afternoon note on your mood?',
   ],
-  [
+  evening: [
     'How did today land?',
     'Winding down — how was today?',
     'Before the day ends, how do you feel?',
     'Any thoughts on how today went?',
     'One last check-in for today.',
   ],
-];
+} as const;
+
+function poolFor(hour: number): readonly string[] {
+  if (hour < 12) return REMINDER_BODIES.morning;
+  if (hour < 17) return REMINDER_BODIES.afternoon;
+  return REMINDER_BODIES.evening;
+}
 
 /**
  * iOS keeps at most 64 pending notifications per app and silently drops the
@@ -84,8 +89,6 @@ export async function requestPermissions(): Promise<boolean> {
   return status === 'granted';
 }
 
-type Occurrence = { date: Date; slot: number };
-
 /**
  * Whole days since the epoch in local time. Used to seed the copy rotation so a
  * given calendar date always gets the same line, even though the queue is
@@ -95,64 +98,94 @@ function localDayIndex(date: Date): number {
   return Math.floor((date.getTime() - date.getTimezoneOffset() * 60_000) / 86_400_000);
 }
 
-/** The next `count` reminder slots strictly after `from`, in chronological order. */
-function upcomingOccurrences(count: number, from: Date): Occurrence[] {
-  const occurrences: Occurrence[] = [];
+/** The next `count` reminder times strictly after `from`, in chronological order. */
+function upcomingOccurrences(
+  count: number,
+  from: Date,
+  times: readonly ReminderTime[]
+): Date[] {
+  const occurrences: Date[] = [];
+  if (times.length === 0) return occurrences;
 
   for (let dayOffset = 0; occurrences.length < count; dayOffset += 1) {
-    for (const [slot, time] of REMINDER_TIMES.entries()) {
+    for (const time of times) {
       if (occurrences.length >= count) break;
 
       const date = new Date(from);
       date.setDate(date.getDate() + dayOffset);
       date.setHours(time.hour, time.minute, 0, 0);
-      // Slots already past today are skipped rather than scheduled in the past.
+      // Times already past today are skipped rather than scheduled in the past.
       if (date.getTime() <= from.getTime()) continue;
 
-      occurrences.push({ date, slot });
+      occurrences.push(date);
     }
   }
 
   return occurrences;
 }
 
-function bodyFor({ date, slot }: Occurrence): string {
-  const options = REMINDER_BODIES[slot];
+function bodyFor(date: Date): string {
+  const options = poolFor(date.getHours());
   return options[localDayIndex(date) % options.length];
 }
 
+async function listLocalReminders(): Promise<Notifications.NotificationRequest[]> {
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  return scheduled.filter((item) =>
+    item.identifier.startsWith(LOCAL_REMINDER_IDENTIFIER_PREFIX)
+  );
+}
+
 /**
- * Fills the pending queue with the next MAX_SCHEDULED_REMINDERS reminders.
+ * True when the pending queue is already full *and* was built from these exact
+ * times. Each reminder carries the fingerprint it was scheduled under, so the
+ * queue describes its own configuration — no second source of truth to drift.
+ */
+async function queueIsCurrent(fingerprint: string): Promise<boolean> {
+  const pending = await listLocalReminders();
+  return (
+    pending.length >= MAX_SCHEDULED_REMINDERS &&
+    pending.every((item) => item.content.data?.schedule === fingerprint)
+  );
+}
+
+/**
+ * Fills the pending queue with the next MAX_SCHEDULED_REMINDERS reminders at
+ * `times`.
  *
- * The queue only shrinks as reminders fire, so a full one is already correct and
- * is left alone unless `force` is set. Any rebuild cancels first, so repeated
- * calls cannot stack duplicate triggers.
+ * The queue only shrinks as reminders fire, so one that is still full and still
+ * matches `times` is left alone. Any rebuild cancels first, so repeated calls
+ * cannot stack duplicate triggers.
  */
 export async function scheduleLocalReminders(
+  times: readonly ReminderTime[],
   options: { force?: boolean } = {}
 ): Promise<number> {
   const { force = false } = options;
+  const ordered = sortReminderTimes(times);
+  const fingerprint = serializeReminderTimes(ordered);
+
   await ensureAndroidChannel();
 
-  if (!force && (await countLocalReminders()) >= MAX_SCHEDULED_REMINDERS) {
+  if (!force && (await queueIsCurrent(fingerprint))) {
     return MAX_SCHEDULED_REMINDERS;
   }
 
   await cancelLocalReminders();
 
-  const occurrences = upcomingOccurrences(MAX_SCHEDULED_REMINDERS, new Date());
+  const occurrences = upcomingOccurrences(MAX_SCHEDULED_REMINDERS, new Date(), ordered);
   await Promise.all(
-    occurrences.map((occurrence, index) =>
+    occurrences.map((date, index) =>
       Notifications.scheduleNotificationAsync({
         identifier: `${LOCAL_REMINDER_IDENTIFIER_PREFIX}${index}`,
         content: {
           title: REMINDER_TITLE,
-          body: bodyFor(occurrence),
-          data: { url: '/' },
+          body: bodyFor(date),
+          data: { url: '/', schedule: fingerprint },
         },
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.DATE,
-          date: occurrence.date,
+          date,
           // channelId belongs on the trigger; the content input ignores it.
           ...(Platform.OS === 'android' ? { channelId: ANDROID_CHANNEL_ID } : {}),
         },
@@ -164,19 +197,14 @@ export async function scheduleLocalReminders(
 }
 
 export async function cancelLocalReminders(): Promise<void> {
-  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  const pending = await listLocalReminders();
   await Promise.all(
-    scheduled
-      .filter((item) => item.identifier.startsWith(LOCAL_REMINDER_IDENTIFIER_PREFIX))
-      .map((item) => Notifications.cancelScheduledNotificationAsync(item.identifier))
+    pending.map((item) => Notifications.cancelScheduledNotificationAsync(item.identifier))
   );
 }
 
 export async function countLocalReminders(): Promise<number> {
-  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
-  return scheduled.filter((item) =>
-    item.identifier.startsWith(LOCAL_REMINDER_IDENTIFIER_PREFIX)
-  ).length;
+  return (await listLocalReminders()).length;
 }
 
 /** Fires an immediate notification so the wiring can be checked on a simulator. */
@@ -197,6 +225,7 @@ export async function sendTestNotification(): Promise<void> {
 
 /** One-shot setup on app start: permissions, then top up the reminder queue. */
 export async function setUpNotifications(
+  times: readonly ReminderTime[],
   options: { enableLocalReminders?: boolean } = {}
 ): Promise<NotificationSetupResult> {
   const { enableLocalReminders = true } = options;
@@ -213,6 +242,6 @@ export async function setUpNotifications(
 
   return {
     permissionGranted: true,
-    localRemindersScheduled: await scheduleLocalReminders(),
+    localRemindersScheduled: await scheduleLocalReminders(times),
   };
 }

@@ -1,6 +1,6 @@
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useRef } from 'react';
-import { getSetting, SETTING_KEYS } from '../db/settings';
+import { getReminderTimes, getSetting, SETTING_KEYS } from '../db/settings';
 import { setUpNotifications } from '../lib/notifications';
 
 /**
@@ -20,8 +20,11 @@ export function NotificationBootstrap() {
 
     (async () => {
       try {
-        const enabled = await getSetting(db, SETTING_KEYS.localRemindersEnabled);
-        await setUpNotifications({ enableLocalReminders: enabled !== '0' });
+        const [enabled, times] = await Promise.all([
+          getSetting(db, SETTING_KEYS.localRemindersEnabled),
+          getReminderTimes(db),
+        ]);
+        await setUpNotifications(times, { enableLocalReminders: enabled !== '0' });
       } catch {
         // Non-fatal: the app is fully usable without notifications.
       }

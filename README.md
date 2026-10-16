@@ -18,7 +18,8 @@ scheduled on-device by the OS, so there is no server and no account.
   or 60 days, read straight from the local database, plus summary stats and a
   habit breakdown for the window.
 - **Reminders** — three on-device notifications a day titled "Track your mood",
-  with the wording varying by time of day; tapping one opens the log screen.
+  each at a time you choose (default 9:00, 14:00, 20:00) and with the wording
+  varying by time of day; tapping one opens the log screen.
 
 ## Stack
 
@@ -69,8 +70,8 @@ app/                       expo-router routes
   settings.tsx             Reminder status and diagnostics (modal)
 src/
   db/                      schema, migrations, CRUD, settings store
-  components/              Card, ScoreSlider, DateTimeField, MoodChart, …
-  lib/                     dates, stats aggregation, mood words, notifications
+  components/              Card, ScoreSlider, DateTimeField, TimeField, MoodChart, …
+  lib/                     dates, stats, mood words, notifications, reminder times
   theme.ts                 light/dark palettes and spacing tokens
 ```
 
@@ -102,13 +103,22 @@ new `if (currentDbVersion === n)` block.
 ## Reminders
 
 Reminders are scheduled entirely on-device — no server, no push token, no
-account. They work offline and in the Simulator. Everything lives in
-`src/lib/notifications.ts`.
+account. They work offline and in the Simulator. Scheduling lives in
+`src/lib/notifications.ts`; the times themselves are a separate pure module,
+`src/lib/reminderTimes.ts`.
 
-Three fire per day at 9:00, 14:00, and 20:00 local time (`REMINDER_TIMES`). The
-title is always "Track your mood"; the body is drawn from a per-slot rotation
-(`REMINDER_BODIES`) keyed on the calendar date, so a morning nudge reads
-differently from an evening one and consecutive days do not repeat themselves.
+Three fire per day, defaulting to 9:00, 14:00 and 20:00 local
+(`DEFAULT_REMINDER_TIMES`). **Each one is adjustable** from the Reminders screen
+— tap a row to open a time picker. Changes are saved to the `settings` table
+under `reminder_times` as `"09:00,14:00,20:00"`, kept sorted so the list always
+reads top-to-bottom through the day. A malformed or missing value falls back to
+the defaults rather than scheduling nonsense.
+
+The title is always "Track your mood"; the body is drawn from a rotation
+(`REMINDER_BODIES`) keyed on the calendar date, so consecutive days do not
+repeat themselves. Pools are selected by **the reminder's actual hour**
+(morning < 12:00, afternoon < 17:00, evening after) rather than by its position
+in the list, so re-timing a reminder to the evening also re-themes its wording.
 
 ### Why sixty, and why it is topped up
 
@@ -120,8 +130,12 @@ notifications and leaves the remaining slots free. At three a day that is a
 Because each one is a specific date rather than a repeating trigger, the queue
 drains as reminders fire. `NotificationBootstrap` calls `scheduleLocalReminders()`
 on every app launch to refill it, which pushes the twenty-day window forward.
-The rebuild is skipped when the queue is already full, so launching the app
-repeatedly in one day does no redundant work.
+
+Every scheduled reminder carries the times it was built from in its `data`
+payload, so the queue describes its own configuration. A rebuild is skipped only
+when the queue is both full *and* still matches the configured times — which
+means launching the app repeatedly does no redundant work, while re-timing a
+reminder always takes effect even though the queue was already full.
 
 > **The trade-off:** if the app is never opened for twenty days, the queue
 > empties and reminders stop until it is opened again. A repeating daily trigger
@@ -129,9 +143,10 @@ repeatedly in one day does no redundant work.
 > priority here; if you would rather have reminders that never lapse, swap the
 > `DATE` triggers in `scheduleLocalReminders()` for three `DAILY` ones.
 
-The **Reminders** screen (bell icon on the Log screen) shows permission state,
-how many reminders are queued and how far ahead they reach, and a "send a test
-reminder" button that fires one three seconds later.
+The **Reminders** screen (bell icon on the Log screen) has a picker for each of
+the three times, a reset-to-defaults shortcut, permission state, how many
+reminders are queued and how far ahead they reach, and a "send a test reminder"
+button that fires one three seconds later.
 
 ## Using your personal Expo account (not `caitcommittee`)
 

@@ -11,22 +11,31 @@ import {
   View,
 } from 'react-native';
 import { Card } from '@/components/Card';
-import { getSetting, SETTING_KEYS, setSetting } from '@/db';
+import { TimeField } from '@/components/TimeField';
+import {
+  getReminderTimes,
+  getSetting,
+  SETTING_KEYS,
+  setReminderTimes,
+  setSetting,
+} from '@/db';
 import {
   cancelLocalReminders,
   countLocalReminders,
-  REMINDER_TIMES,
   requestPermissions,
   scheduleLocalReminders,
   sendTestNotification,
 } from '@/lib/notifications';
+import {
+  DEFAULT_REMINDER_TIMES,
+  reminderTimesEqual,
+  sortReminderTimes,
+  type ReminderTime,
+} from '@/lib/reminderTimes';
 import { radius, spacing, usePalette } from '@/theme';
 
-function formatTime(hour: number, minute: number): string {
-  const d = new Date();
-  d.setHours(hour, minute, 0, 0);
-  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-}
+/** Row labels for the time pickers, in chronological order. */
+const TIME_LABELS = ['First reminder', 'Second reminder', 'Third reminder'];
 
 export default function SettingsScreen() {
   const db = useSQLiteContext();
@@ -35,15 +44,18 @@ export default function SettingsScreen() {
   const [permission, setPermission] = useState<boolean | null>(null);
   const [localEnabled, setLocalEnabled] = useState(true);
   const [scheduledCount, setScheduledCount] = useState(0);
+  const [times, setTimes] = useState<ReminderTime[]>([...DEFAULT_REMINDER_TIMES]);
   const [testSent, setTestSent] = useState(false);
 
   const refresh = useCallback(async () => {
-    const [count, enabledSetting] = await Promise.all([
+    const [count, enabledSetting, storedTimes] = await Promise.all([
       countLocalReminders(),
       getSetting(db, SETTING_KEYS.localRemindersEnabled),
+      getReminderTimes(db),
     ]);
     setScheduledCount(count);
     setLocalEnabled(enabledSetting !== '0');
+    setTimes(storedTimes);
   }, [db]);
 
   useEffect(() => {
@@ -58,13 +70,36 @@ export default function SettingsScreen() {
         const granted = await requestPermissions();
         setPermission(granted);
         // Force a rebuild: switching back on should refill the queue right away.
-        if (granted) await scheduleLocalReminders({ force: true });
+        if (granted) await scheduleLocalReminders(times, { force: true });
       } else {
         await cancelLocalReminders();
       }
       await refresh();
     },
-    [db, refresh]
+    [db, refresh, times]
+  );
+
+  /** Persists a new set of times and rebuilds the queue around them. */
+  const applyTimes = useCallback(
+    async (next: readonly ReminderTime[]) => {
+      const ordered = sortReminderTimes(next);
+      setTimes(ordered);
+      await setReminderTimes(db, ordered);
+      if (localEnabled) {
+        const granted = await requestPermissions();
+        setPermission(granted);
+        // The queue is full of the old times, so this rebuild must be forced.
+        if (granted) await scheduleLocalReminders(ordered, { force: true });
+      }
+      await refresh();
+    },
+    [db, localEnabled, refresh]
+  );
+
+  const onChangeTime = useCallback(
+    (index: number, next: ReminderTime) =>
+      applyTimes(times.map((time, i) => (i === index ? next : time))),
+    [applyTimes, times]
   );
 
   const onTest = useCallback(async () => {
@@ -76,7 +111,8 @@ export default function SettingsScreen() {
     setTimeout(() => setTestSent(false), 4000);
   }, []);
 
-  const daysOfCoverage = Math.ceil(scheduledCount / REMINDER_TIMES.length);
+  const daysOfCoverage = Math.ceil(scheduledCount / Math.max(1, times.length));
+  const isDefault = reminderTimesEqual(times, DEFAULT_REMINDER_TIMES);
 
   return (
     <ScrollView
@@ -92,18 +128,29 @@ export default function SettingsScreen() {
             trackColor={{ true: palette.accent, false: palette.border }}
           />
         }>
-        <View style={styles.timeRow}>
-          {REMINDER_TIMES.map((time) => (
-            <View
-              key={`${time.hour}:${time.minute}`}
-              style={[styles.timePill, { backgroundColor: palette.cardAlt }]}>
-              <Ionicons name="time-outline" size={14} color={palette.textMuted} />
-              <Text style={[styles.timeText, { color: palette.text }]}>
-                {formatTime(time.hour, time.minute)}
-              </Text>
-            </View>
+        <View style={styles.timeList}>
+          {times.map((time, index) => (
+            <TimeField
+              key={index}
+              label={TIME_LABELS[index] ?? `Reminder ${index + 1}`}
+              value={time}
+              onChange={(next) => onChangeTime(index, next)}
+            />
           ))}
         </View>
+
+        {!isDefault && (
+          <Pressable
+            onPress={() => applyTimes(DEFAULT_REMINDER_TIMES)}
+            hitSlop={6}
+            style={styles.resetRow}>
+            <Ionicons name="refresh" size={14} color={palette.accent} />
+            <Text style={[styles.resetText, { color: palette.accent }]}>
+              Reset to 9:00 AM, 2:00 PM, 8:00 PM
+            </Text>
+          </Pressable>
+        )}
+
         <Text style={[styles.note, { color: palette.textFaint }]}>
           {scheduledCount > 0
             ? `${scheduledCount} reminders queued — about ${daysOfCoverage} days ahead. ` +
@@ -163,16 +210,9 @@ function Row({ label, value, ok }: { label: string; value: string; ok: boolean }
 
 const styles = StyleSheet.create({
   content: { padding: spacing.lg, gap: spacing.lg },
-  timeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  timePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 7,
-  },
-  timeText: { fontSize: 13.5, fontWeight: '600' },
+  timeList: { gap: spacing.sm },
+  resetRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  resetText: { fontSize: 13, fontWeight: '600' },
   note: { fontSize: 12, lineHeight: 17 },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   rowLabel: { fontSize: 13.5, width: 94 },
