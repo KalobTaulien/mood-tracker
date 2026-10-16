@@ -36,7 +36,7 @@
         {
           "color": "#5B6CFF",
           "defaultChannel": "mood-reminders",
-          "enableRemoteNotifications": true
+          "enableRemoteNotifications": false
         }
       ],
       [
