@@ -39,13 +39,13 @@ export function DateTimeField({ value, onChange, emptyLabel = 'Pick a date & tim
         value: initial,
         mode: 'date',
         maximumDate: new Date(),
-        onChange: (dateEvent, pickedDate) => {
-          if (dateEvent.type !== 'set' || !pickedDate) return;
+        // onValueChange fires only on a real selection, so dismissing either
+        // dialog just stops the flow — no event-type guard needed.
+        onValueChange: (_dateEvent, pickedDate) => {
           DateTimePickerAndroid.open({
             value: pickedDate,
             mode: 'time',
-            onChange: (timeEvent, pickedTime) => {
-              if (timeEvent.type !== 'set' || !pickedTime) return;
+            onValueChange: (_timeEvent, pickedTime) => {
               const merged = new Date(pickedDate);
               merged.setHours(pickedTime.getHours(), pickedTime.getMinutes(), 0, 0);
               onChange(merged.toISOString());
@@ -147,7 +147,7 @@ export function DateTimeField({ value, onChange, emptyLabel = 'Pick a date & tim
               display="spinner"
               maximumDate={new Date()}
               themeVariant={isDark ? 'dark' : 'light'}
-              onChange={(_event, picked) => picked && setDraftDate(picked)}
+              onValueChange={(_event, picked) => setDraftDate(picked)}
             />
           </View>
         </Modal>
