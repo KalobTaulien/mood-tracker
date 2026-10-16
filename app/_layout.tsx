@@ -72,6 +72,10 @@ export default function RootLayout() {
                 headerTintColor: palette.accent,
                 headerShadowVisible: false,
                 contentStyle: { backgroundColor: palette.bg },
+                // (tabs) has no title of its own, so iOS would label the back
+                // button with the raw route name. Detail screens open from
+                // several tabs, so stay generic rather than naming one.
+                headerBackTitle: 'Back',
               }}>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               <Stack.Screen
