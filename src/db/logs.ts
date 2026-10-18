@@ -4,7 +4,9 @@ import { rowToLog, type MoodLog, type MoodLogDraft, type MoodLogRow } from './ty
 
 const SELECT_COLUMNS = `
   id, created_at, updated_at, mood_score, mood_word, lonely_at, lonely_note,
-  exercised, exercise_note, self_harm_thoughts, fatigue_score, last_vegetable_at
+  exercised, exercise_note, self_harm_thoughts, fatigue_score, fatigue_word,
+  fatigue_note, last_vegetable_at, last_junk_food_at, junk_food_note,
+  last_processed_sugar_at, processed_sugar_note
 `;
 
 function trimOrNull(value: string | null | undefined): string | null {
@@ -17,8 +19,10 @@ export async function insertLog(db: SQLiteDatabase, draft: MoodLogDraft): Promis
   const result = await db.runAsync(
     `INSERT INTO logs (
        created_at, updated_at, mood_score, mood_word, lonely_at, lonely_note,
-       exercised, exercise_note, self_harm_thoughts, fatigue_score, last_vegetable_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       exercised, exercise_note, self_harm_thoughts, fatigue_score, fatigue_word,
+       fatigue_note, last_vegetable_at, last_junk_food_at, junk_food_note,
+       last_processed_sugar_at, processed_sugar_note
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       createdAt,
       createdAt,
@@ -30,7 +34,13 @@ export async function insertLog(db: SQLiteDatabase, draft: MoodLogDraft): Promis
       trimOrNull(draft.exerciseNote),
       trimOrNull(draft.selfHarmThoughts),
       draft.fatigueScore,
+      trimOrNull(draft.fatigueWord),
+      trimOrNull(draft.fatigueNote),
       draft.lastVegetableAt,
+      draft.lastJunkFoodAt,
+      trimOrNull(draft.junkFoodNote),
+      draft.lastProcessedSugarAt,
+      trimOrNull(draft.processedSugarNote),
     ]
   );
   return result.lastInsertRowId;
@@ -45,7 +55,9 @@ export async function updateLog(
     `UPDATE logs SET
        updated_at = ?, mood_score = ?, mood_word = ?, lonely_at = ?, lonely_note = ?,
        exercised = ?, exercise_note = ?, self_harm_thoughts = ?, fatigue_score = ?,
-       last_vegetable_at = ?
+       fatigue_word = ?, fatigue_note = ?, last_vegetable_at = ?,
+       last_junk_food_at = ?, junk_food_note = ?,
+       last_processed_sugar_at = ?, processed_sugar_note = ?
      WHERE id = ?`,
     [
       nowIso(),
@@ -57,7 +69,13 @@ export async function updateLog(
       trimOrNull(draft.exerciseNote),
       trimOrNull(draft.selfHarmThoughts),
       draft.fatigueScore,
+      trimOrNull(draft.fatigueWord),
+      trimOrNull(draft.fatigueNote),
       draft.lastVegetableAt,
+      draft.lastJunkFoodAt,
+      trimOrNull(draft.junkFoodNote),
+      draft.lastProcessedSugarAt,
+      trimOrNull(draft.processedSugarNote),
       id,
     ]
   );
@@ -100,7 +118,11 @@ export async function countLogs(db: SQLiteDatabase): Promise<number> {
 /** Most recent non-null value for a datetime column, for "last time I…" prefills. */
 export async function latestTimestamp(
   db: SQLiteDatabase,
-  column: 'lonely_at' | 'last_vegetable_at'
+  column:
+    | 'lonely_at'
+    | 'last_vegetable_at'
+    | 'last_junk_food_at'
+    | 'last_processed_sugar_at'
 ): Promise<string | null> {
   const row = await db.getFirstAsync<{ value: string | null }>(
     `SELECT MAX(${column}) AS value FROM logs WHERE ${column} IS NOT NULL`

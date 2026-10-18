@@ -17,14 +17,14 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from '@/components/Card';
 import { DateTimeField } from '@/components/DateTimeField';
-import { MoodWordPicker } from '@/components/MoodWordPicker';
 import { NotesField } from '@/components/NotesField';
 import { ScoreSlider } from '@/components/ScoreSlider';
+import { WordPicker } from '@/components/WordPicker';
 import { YesNoField } from '@/components/YesNoField';
 import { deleteLog, getLog, updateLog } from '@/db';
 import type { MoodLog, MoodLogDraft } from '@/db';
 import { formatDateTime, relativeFromNow } from '@/lib/dates';
-import { fatigueLabelFor } from '@/lib/mood';
+import { fatigueWordsFor, moodWordsFor } from '@/lib/mood';
 import { radius, scoreColor, spacing, useIsDark, usePalette } from '@/theme';
 
 function toDraft(log: MoodLog): MoodLogDraft {
@@ -166,8 +166,8 @@ export default function LogDetailScreen() {
             minLabel="Worst"
             maxLabel="Best"
           />
-          <MoodWordPicker
-            score={draft.moodScore}
+          <WordPicker
+            suggestions={draft.moodScore === null ? [] : moodWordsFor(draft.moodScore)}
             word={draft.moodWord}
             onChangeWord={(moodWord) => patch({ moodWord })}
             tint={moodTint}
@@ -179,11 +179,23 @@ export default function LogDetailScreen() {
             value={draft.fatigueScore}
             onChange={(fatigueScore) => patch({ fatigueScore })}
             tint={fatigueTint}
-            caption={
-              draft.fatigueScore === null ? undefined : fatigueLabelFor(draft.fatigueScore)
-            }
             minLabel="Rested"
             maxLabel="Crash"
+          />
+          <WordPicker
+            suggestions={
+              draft.fatigueScore === null ? [] : fatigueWordsFor(draft.fatigueScore)
+            }
+            word={draft.fatigueWord}
+            onChangeWord={(fatigueWord) => patch({ fatigueWord })}
+            tint={fatigueTint}
+            emptyPlaceholder="A word for how tired you feel"
+          />
+          <NotesField
+            value={draft.fatigueNote}
+            onChange={(fatigueNote) => patch({ fatigueNote })}
+            placeholder="Anything else about the tiredness? (optional)"
+            minHeight={60}
           />
         </Card>
 
@@ -232,6 +244,36 @@ export default function LogDetailScreen() {
             value={draft.lastVegetableAt}
             onChange={(lastVegetableAt) => patch({ lastVegetableAt })}
             emptyLabel="Pick when you last ate a vegetable"
+          />
+        </Card>
+
+        <Card title="Junk food" subtitle="Last time you ate fast food or something you'd call junk.">
+          <DateTimeField
+            value={draft.lastJunkFoodAt}
+            onChange={(lastJunkFoodAt) => patch({ lastJunkFoodAt })}
+            emptyLabel="Pick when you last ate junk food"
+          />
+          <NotesField
+            value={draft.junkFoodNote}
+            onChange={(junkFoodNote) => patch({ junkFoodNote })}
+            placeholder="What was it? (optional)"
+            minHeight={60}
+          />
+        </Card>
+
+        <Card
+          title="Processed sugar"
+          subtitle="Last time you had added sugar. Sugar from whole fruit does not count.">
+          <DateTimeField
+            value={draft.lastProcessedSugarAt}
+            onChange={(lastProcessedSugarAt) => patch({ lastProcessedSugarAt })}
+            emptyLabel="Pick when you last had processed sugar"
+          />
+          <NotesField
+            value={draft.processedSugarNote}
+            onChange={(processedSugarNote) => patch({ processedSugarNote })}
+            placeholder="What was it? (optional)"
+            minHeight={60}
           />
         </Card>
 

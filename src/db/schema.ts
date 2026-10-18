@@ -1,7 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 export const DATABASE_NAME = 'mood-tracker.db';
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 4;
 
 /**
  * Runs on every app start via SQLiteProvider's `onInit`.
@@ -50,6 +50,28 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
        WHERE key IN ('push_token', 'push_token_registered_at');
     `);
     currentDbVersion = 2;
+  }
+
+  if (currentDbVersion === 2) {
+    // Fatigue gained a word + free-text context, and junk food became its own
+    // tracker alongside vegetables.
+    await db.execAsync(`
+      ALTER TABLE logs ADD COLUMN fatigue_word      TEXT;
+      ALTER TABLE logs ADD COLUMN fatigue_note      TEXT;
+      ALTER TABLE logs ADD COLUMN last_junk_food_at TEXT;
+      ALTER TABLE logs ADD COLUMN junk_food_note    TEXT;
+    `);
+    currentDbVersion = 3;
+  }
+
+  if (currentDbVersion === 3) {
+    // Processed sugar is tracked separately from junk food: a full-sugar soda
+    // counts even when the meal around it did not.
+    await db.execAsync(`
+      ALTER TABLE logs ADD COLUMN last_processed_sugar_at TEXT;
+      ALTER TABLE logs ADD COLUMN processed_sugar_note    TEXT;
+    `);
+    currentDbVersion = 4;
   }
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);

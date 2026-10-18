@@ -17,7 +17,7 @@ import { RangeSelector, type Range } from '@/components/RangeSelector';
 import { listLogsSince } from '@/db';
 import type { MoodLog } from '@/db';
 import { rangeStart, toIso } from '@/lib/dates';
-import { buildDailySeries, summarize } from '@/lib/stats';
+import { buildDailySeries, frequencyHint, summarize } from '@/lib/stats';
 import { radius, spacing, usePalette } from '@/theme';
 
 export default function TrendsScreen() {
@@ -142,6 +142,20 @@ export default function TrendsScreen() {
           }
           hint="later half vs earlier"
         />
+        <Stat
+          label="Junk food"
+          value={summary.junkFoodEvents === 0 ? '0' : `${summary.junkFoodEvents}×`}
+          tint={summary.junkFoodEvents === 0 ? palette.success : palette.fatigue}
+          hint={frequencyHint(summary.junkFoodEvents, range) ?? 'none logged yet'}
+        />
+        <Stat
+          label="Processed sugar"
+          value={
+            summary.processedSugarEvents === 0 ? '0' : `${summary.processedSugarEvents}×`
+          }
+          tint={summary.processedSugarEvents === 0 ? palette.success : palette.fatigue}
+          hint={frequencyHint(summary.processedSugarEvents, range) ?? 'none logged yet'}
+        />
       </View>
 
       <Card title="Habits in this window">
@@ -165,10 +179,30 @@ export default function TrendsScreen() {
         />
         <HabitRow
           icon="nutrition-outline"
-          label="Vegetable logged"
-          value={`${logs.filter((l) => l.lastVegetableAt).length} ${
-            logs.filter((l) => l.lastVegetableAt).length === 1 ? 'entry' : 'entries'
-          }`}
+          label="Vegetables eaten"
+          value={
+            summary.vegetableEvents === 0
+              ? 'None recorded'
+              : `${summary.vegetableEvents}× · ${frequencyHint(summary.vegetableEvents, range)}`
+          }
+        />
+        <HabitRow
+          icon="fast-food-outline"
+          label="Junk food eaten"
+          value={
+            summary.junkFoodEvents === 0
+              ? 'None recorded'
+              : `${summary.junkFoodEvents}× · ${frequencyHint(summary.junkFoodEvents, range)}`
+          }
+        />
+        <HabitRow
+          icon="ice-cream-outline"
+          label="Processed sugar"
+          value={
+            summary.processedSugarEvents === 0
+              ? 'None recorded'
+              : `${summary.processedSugarEvents}× · ${frequencyHint(summary.processedSugarEvents, range)}`
+          }
         />
         <HabitRow
           icon="alert-circle-outline"

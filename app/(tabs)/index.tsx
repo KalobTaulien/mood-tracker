@@ -16,14 +16,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from '@/components/Card';
 import { Chip } from '@/components/Chip';
 import { DateTimeField } from '@/components/DateTimeField';
-import { MoodWordPicker } from '@/components/MoodWordPicker';
 import { NotesField } from '@/components/NotesField';
 import { ScoreSlider } from '@/components/ScoreSlider';
+import { WordPicker } from '@/components/WordPicker';
 import { YesNoField } from '@/components/YesNoField';
 import { emptyDraft, insertLog, isDraftEmpty, latestTimestamp, listLogs } from '@/db';
 import type { MoodLogDraft } from '@/db';
 import { formatDateTime, relativeFromNow } from '@/lib/dates';
-import { fatigueLabelFor } from '@/lib/mood';
+import { fatigueWordsFor, moodWordsFor } from '@/lib/mood';
 import { radius, scoreColor, spacing, useIsDark, usePalette } from '@/theme';
 
 export default function LogScreen() {
@@ -38,16 +38,22 @@ export default function LogScreen() {
   const [lastLogAt, setLastLogAt] = useState<string | null>(null);
   const [previousLonely, setPreviousLonely] = useState<string | null>(null);
   const [previousVegetable, setPreviousVegetable] = useState<string | null>(null);
+  const [previousJunkFood, setPreviousJunkFood] = useState<string | null>(null);
+  const [previousSugar, setPreviousSugar] = useState<string | null>(null);
 
   const loadContext = useCallback(async () => {
-    const [recent, lonely, vegetable] = await Promise.all([
+    const [recent, lonely, vegetable, junkFood, sugar] = await Promise.all([
       listLogs(db, 1),
       latestTimestamp(db, 'lonely_at'),
       latestTimestamp(db, 'last_vegetable_at'),
+      latestTimestamp(db, 'last_junk_food_at'),
+      latestTimestamp(db, 'last_processed_sugar_at'),
     ]);
     setLastLogAt(recent[0]?.createdAt ?? null);
     setPreviousLonely(lonely);
     setPreviousVegetable(vegetable);
+    setPreviousJunkFood(junkFood);
+    setPreviousSugar(sugar);
   }, [db]);
 
   useFocusEffect(
@@ -150,8 +156,8 @@ export default function LogScreen() {
             minLabel="Worst"
             maxLabel="Best"
           />
-          <MoodWordPicker
-            score={draft.moodScore}
+          <WordPicker
+            suggestions={draft.moodScore === null ? [] : moodWordsFor(draft.moodScore)}
             word={draft.moodWord}
             onChangeWord={(moodWord) => patch({ moodWord })}
             tint={moodTint}
@@ -165,9 +171,23 @@ export default function LogScreen() {
             value={draft.fatigueScore}
             onChange={(fatigueScore) => patch({ fatigueScore })}
             tint={fatigueTint}
-            caption={draft.fatigueScore === null ? undefined : fatigueLabelFor(draft.fatigueScore)}
             minLabel="Rested"
             maxLabel="Crash"
+          />
+          <WordPicker
+            suggestions={
+              draft.fatigueScore === null ? [] : fatigueWordsFor(draft.fatigueScore)
+            }
+            word={draft.fatigueWord}
+            onChangeWord={(fatigueWord) => patch({ fatigueWord })}
+            tint={fatigueTint}
+            emptyPlaceholder="A word for how tired you feel"
+          />
+          <NotesField
+            value={draft.fatigueNote}
+            onChange={(fatigueNote) => patch({ fatigueNote })}
+            placeholder="Anything else about the tiredness? (optional)"
+            minHeight={60}
           />
         </Card>
 
@@ -240,6 +260,50 @@ export default function LogScreen() {
               onReuse={() => patch({ lastVegetableAt: previousVegetable })}
             />
           )}
+        </Card>
+
+        <Card
+          title="Junk food"
+          subtitle="Last time you ate fast food or anything you'd call junk — tracked only to show how often it happens.">
+          <DateTimeField
+            value={draft.lastJunkFoodAt}
+            onChange={(lastJunkFoodAt) => patch({ lastJunkFoodAt })}
+            emptyLabel="Pick when you last ate junk food"
+          />
+          {previousJunkFood && draft.lastJunkFoodAt === null && (
+            <PreviousHint
+              label={`Previously ${formatDateTime(previousJunkFood)}`}
+              onReuse={() => patch({ lastJunkFoodAt: previousJunkFood })}
+            />
+          )}
+          <NotesField
+            value={draft.junkFoodNote}
+            onChange={(junkFoodNote) => patch({ junkFoodNote })}
+            placeholder="What was it? (optional)"
+            minHeight={60}
+          />
+        </Card>
+
+        <Card
+          title="Processed sugar"
+          subtitle="Last time you had added sugar — full-sugar soda, cake, candy, sweetened coffee. Sugar from whole fruit does not count.">
+          <DateTimeField
+            value={draft.lastProcessedSugarAt}
+            onChange={(lastProcessedSugarAt) => patch({ lastProcessedSugarAt })}
+            emptyLabel="Pick when you last had processed sugar"
+          />
+          {previousSugar && draft.lastProcessedSugarAt === null && (
+            <PreviousHint
+              label={`Previously ${formatDateTime(previousSugar)}`}
+              onReuse={() => patch({ lastProcessedSugarAt: previousSugar })}
+            />
+          )}
+          <NotesField
+            value={draft.processedSugarNote}
+            onChange={(processedSugarNote) => patch({ processedSugarNote })}
+            placeholder="What was it? (optional)"
+            minHeight={60}
+          />
         </Card>
       </ScrollView>
 

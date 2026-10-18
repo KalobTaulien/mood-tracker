@@ -12,12 +12,23 @@ type Props = {
 /** Compact tags summarising which optional fields this log actually carries. */
 function tagsFor(log: MoodLog): string[] {
   const tags: string[] = [];
-  if (log.fatigueScore !== null) tags.push(`fatigue ${log.fatigueScore}`);
+  const fatigueWord = log.fatigueWord?.trim().toLowerCase();
+  if (log.fatigueScore !== null) {
+    tags.push(
+      fatigueWord
+        ? `fatigue ${log.fatigueScore} · ${fatigueWord}`
+        : `fatigue ${log.fatigueScore}`
+    );
+  } else if (fatigueWord) {
+    tags.push(fatigueWord);
+  }
   if (log.exercised === 1) tags.push('exercised');
   if (log.exercised === 0) tags.push('no exercise');
   if (log.lonelyAt) tags.push('loneliness');
   if (log.selfHarmThoughts?.trim()) tags.push('self-harm note');
   if (log.lastVegetableAt) tags.push('veg');
+  if (log.lastJunkFoodAt) tags.push('junk food');
+  if (log.lastProcessedSugarAt) tags.push('sugar');
   return tags;
 }
 

@@ -12,7 +12,13 @@ export type MoodLog = {
   exerciseNote: string | null;
   selfHarmThoughts: string | null;
   fatigueScore: number | null;
+  fatigueWord: string | null;
+  fatigueNote: string | null;
   lastVegetableAt: string | null;
+  lastJunkFoodAt: string | null;
+  junkFoodNote: string | null;
+  lastProcessedSugarAt: string | null;
+  processedSugarNote: string | null;
 };
 
 /** Everything a user can fill in; `createdAt` defaults to now on insert. */
@@ -32,7 +38,13 @@ export type MoodLogRow = {
   exercise_note: string | null;
   self_harm_thoughts: string | null;
   fatigue_score: number | null;
+  fatigue_word: string | null;
+  fatigue_note: string | null;
   last_vegetable_at: string | null;
+  last_junk_food_at: string | null;
+  junk_food_note: string | null;
+  last_processed_sugar_at: string | null;
+  processed_sugar_note: string | null;
 };
 
 export const emptyDraft = (): MoodLogDraft => ({
@@ -44,7 +56,13 @@ export const emptyDraft = (): MoodLogDraft => ({
   exerciseNote: null,
   selfHarmThoughts: null,
   fatigueScore: null,
+  fatigueWord: null,
+  fatigueNote: null,
   lastVegetableAt: null,
+  lastJunkFoodAt: null,
+  junkFoodNote: null,
+  lastProcessedSugarAt: null,
+  processedSugarNote: null,
 });
 
 export function rowToLog(row: MoodLogRow): MoodLog {
@@ -60,7 +78,13 @@ export function rowToLog(row: MoodLogRow): MoodLog {
     exerciseNote: row.exercise_note,
     selfHarmThoughts: row.self_harm_thoughts,
     fatigueScore: row.fatigue_score,
+    fatigueWord: row.fatigue_word,
+    fatigueNote: row.fatigue_note,
     lastVegetableAt: row.last_vegetable_at,
+    lastJunkFoodAt: row.last_junk_food_at,
+    junkFoodNote: row.junk_food_note,
+    lastProcessedSugarAt: row.last_processed_sugar_at,
+    processedSugarNote: row.processed_sugar_note,
   };
 }
 
@@ -72,9 +96,15 @@ export function isDraftEmpty(draft: MoodLogDraft): boolean {
     draft.exercised === null &&
     draft.lonelyAt === null &&
     draft.lastVegetableAt === null &&
+    draft.lastJunkFoodAt === null &&
+    draft.lastProcessedSugarAt === null &&
     !draft.moodWord?.trim() &&
     !draft.lonelyNote?.trim() &&
     !draft.exerciseNote?.trim() &&
-    !draft.selfHarmThoughts?.trim()
+    !draft.selfHarmThoughts?.trim() &&
+    !draft.fatigueWord?.trim() &&
+    !draft.fatigueNote?.trim() &&
+    !draft.junkFoodNote?.trim() &&
+    !draft.processedSugarNote?.trim()
   );
 }

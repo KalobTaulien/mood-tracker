@@ -1,20 +1,26 @@
 import { StyleSheet, View } from 'react-native';
-import { moodWordsFor } from '../lib/mood';
 import { spacing } from '../theme';
 import { Chip } from './Chip';
 import { NotesField } from './NotesField';
 
 type Props = {
-  score: number | null;
+  /** Words offered for the current score; empty hides the chip row. */
+  suggestions: string[];
   word: string | null;
   onChangeWord: (word: string | null) => void;
   tint: string;
+  /** Placeholder for the free-text field when no suggestions are shown. */
+  emptyPlaceholder?: string;
 };
 
 /** Suggestion chips for the current score, plus a free-text escape hatch. */
-export function MoodWordPicker({ score, word, onChangeWord, tint }: Props) {
-  const suggestions = score === null ? [] : moodWordsFor(score);
-
+export function WordPicker({
+  suggestions,
+  word,
+  onChangeWord,
+  tint,
+  emptyPlaceholder = 'A word for how you feel',
+}: Props) {
   return (
     <View style={styles.wrap}>
       {suggestions.length > 0 && (
@@ -38,9 +44,7 @@ export function MoodWordPicker({ score, word, onChangeWord, tint }: Props) {
       <NotesField
         value={word}
         onChange={onChangeWord}
-        placeholder={
-          suggestions.length ? 'Or write your own word' : 'A word for how you feel'
-        }
+        placeholder={suggestions.length ? 'Or write your own word' : emptyPlaceholder}
         multiline={false}
       />
     </View>
