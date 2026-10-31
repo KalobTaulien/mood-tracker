@@ -47,11 +47,14 @@
           "resizeMode": "contain",
           "backgroundColor": "#F7F7FB",
           "dark": {
+            "image": "./assets/splash-icon-dark.png",
             "backgroundColor": "#0E0E14"
           }
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-sharing",
+      "expo-status-bar"
     ],
     "extra": {
       "router": {
