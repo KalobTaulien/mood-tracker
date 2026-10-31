@@ -5,17 +5,17 @@ import { useCallback, useMemo, useState } from 'react';
 import { RefreshControl, SectionList, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LogRow } from '@/components/LogRow';
-import { listLogs } from '@/db';
-import type { MoodLog } from '@/db';
+import { useForm } from '@/hooks/useForm';
 import { dayHeading, dayKey, fromIso } from '@/lib/dates';
+import { listEntries, type Entry } from '@/store';
 import { spacing, usePalette } from '@/theme';
 
-type Section = { title: string; data: MoodLog[] };
+type Section = { title: string; data: Entry[] };
 
-/** Groups logs into local-day sections, newest day first. */
-function toSections(logs: MoodLog[]): Section[] {
+/** Groups entries into local-day sections, newest day first. */
+function toSections(logs: Entry[]): Section[] {
   const order: string[] = [];
-  const grouped = new Map<string, MoodLog[]>();
+  const grouped = new Map<string, Entry[]>();
 
   for (const log of logs) {
     const created = fromIso(log.createdAt);
@@ -37,15 +37,16 @@ export default function HistoryScreen() {
   const db = useSQLiteContext();
   const palette = usePalette();
   const insets = useSafeAreaInsets();
-  const [logs, setLogs] = useState<MoodLog[]>([]);
+  const { form } = useForm();
+  const [logs, setLogs] = useState<Entry[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
-    const rows = await listLogs(db, 500);
+    const rows = await listEntries(db, form.fields, { limit: 500 });
     setLogs(rows);
     setLoaded(true);
-  }, [db]);
+  }, [db, form.fields]);
 
   useFocusEffect(
     useCallback(() => {
@@ -73,9 +74,13 @@ export default function HistoryScreen() {
         sections.length === 0 && styles.emptyContent,
       ]}
       sections={sections}
-      keyExtractor={(item) => String(item.id)}
+      keyExtractor={(item) => item.id}
       renderItem={({ item }) => (
-        <LogRow log={item} onPress={() => router.navigate(`/log/${item.id}`)} />
+        <LogRow
+          entry={item}
+          fields={form.fields}
+          onPress={() => router.navigate(`/log/${item.id}`)}
+        />
       )}
       renderSectionHeader={({ section }) => (
         <View style={[styles.sectionHeader, { backgroundColor: palette.bg }]}>

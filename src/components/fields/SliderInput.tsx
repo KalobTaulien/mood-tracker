@@ -9,32 +9,34 @@ import {
   Text,
   View,
 } from 'react-native';
-import { radius, spacing, usePalette } from '../theme';
+import type { SliderField } from '../../forms';
+import { radius, spacing, usePalette } from '../../theme';
 
 type Props = {
+  field: SliderField;
   value: number | null;
   onChange: (value: number | null) => void;
-  /** Color for the active track and thumb at the current value. */
+  /** Colour for the active track and thumb at the current value. */
   tint: string;
-  /** Rendered under the track when a value is set. */
-  caption?: string;
-  minLabel: string;
-  maxLabel: string;
 };
 
-const STEPS = 11; // 0..10
 const THUMB = 28;
+/** Above this many steps the tick marks stop being legible, so they are dropped. */
+const MAX_TICKS = 21;
 
 /**
- * A 0-10 stepped slider built on PanResponder so there is no extra native dependency.
- * Tapping the active number again clears the value, keeping the field optional.
+ * A stepped slider over the field's own range, built on PanResponder so there
+ * is no extra native dependency. Tapping "Clear" removes the value, keeping
+ * the field optional.
  */
-export function ScoreSlider({ value, onChange, tint, caption, minLabel, maxLabel }: Props) {
+export function SliderInput({ field, value, onChange, tint }: Props) {
   const palette = usePalette();
   const [width, setWidth] = useState(0);
   const lastEmitted = useRef<number | null>(value);
   /** locationX where the drag began, so moves can be offset by gesture.dx. */
   const grantX = useRef(0);
+
+  const steps = field.max - field.min + 1;
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     setWidth(e.nativeEvent.layout.width);
@@ -59,11 +61,11 @@ export function ScoreSlider({ value, onChange, tint, caption, minLabel, maxLabel
 
   const valueFromX = useCallback(
     (x: number) => {
-      if (width <= 0) return 0;
+      if (width <= 0) return field.min;
       const ratio = Math.max(0, Math.min(1, (x - THUMB / 2) / travel));
-      return Math.round(ratio * (STEPS - 1));
+      return field.min + Math.round(ratio * (steps - 1));
     },
-    [width, travel]
+    [width, travel, field.min, steps]
   );
 
   // Callers pass an inline onChange, so emit/valueFromX get new identities on
@@ -71,6 +73,12 @@ export function ScoreSlider({ value, onChange, tint, caption, minLabel, maxLabel
   // mid-drag hands the in-flight touch a fresh gestureState that never saw the
   // grant, so gesture.dx stays 0 and the value sticks at the grant point.
   // Keep the instance permanent and read the current logic through this ref.
+  //
+  // Both refs below are deliberately written and read during render: the
+  // PanResponder has to outlive every re-render for a drag to survive one, and
+  // the only way to give a permanent handler fresh logic is a ref updated in
+  // place. react-hooks/refs has no way to express "stable across renders".
+  /* eslint-disable react-hooks/refs */
   const latest = useRef({ emit, valueFromX });
   latest.current = { emit, valueFromX };
 
@@ -94,9 +102,10 @@ export function ScoreSlider({ value, onChange, tint, caption, minLabel, maxLabel
     });
   }
   const responder = responderRef.current;
+  /* eslint-enable react-hooks/refs */
 
   const hasValue = value !== null;
-  const ratio = hasValue ? value / (STEPS - 1) : 0;
+  const ratio = hasValue ? (value - field.min) / Math.max(1, steps - 1) : 0;
   const thumbCenter = width > 0 ? THUMB / 2 + ratio * travel : 0;
   const fillWidth = hasValue ? thumbCenter : 0;
 
@@ -105,7 +114,7 @@ export function ScoreSlider({ value, onChange, tint, caption, minLabel, maxLabel
       <View style={styles.valueRow}>
         <Text style={[styles.value, { color: hasValue ? tint : palette.textFaint }]}>
           {hasValue ? value : '–'}
-          <Text style={[styles.valueMax, { color: palette.textFaint }]}>/10</Text>
+          <Text style={[styles.valueMax, { color: palette.textFaint }]}>/{field.max}</Text>
         </Text>
         {hasValue && (
           <Pressable
@@ -120,33 +129,32 @@ export function ScoreSlider({ value, onChange, tint, caption, minLabel, maxLabel
         )}
       </View>
 
-      {!!caption && (
-        <Text style={[styles.caption, { color: hasValue ? tint : palette.textFaint }]}>
-          {caption}
-        </Text>
-      )}
-
+      {/* eslint-disable-next-line react-hooks/refs -- see the PanResponder note above */}
       <View style={styles.trackArea} onLayout={onLayout} {...responder.panHandlers}>
         <View style={[styles.track, { backgroundColor: palette.cardAlt }]}>
           {hasValue && (
             <View style={[styles.fill, { width: fillWidth, backgroundColor: tint }]} />
           )}
         </View>
-        <View style={styles.ticks} pointerEvents="none">
-          {Array.from({ length: STEPS }, (_, i) => (
-            <View
-              key={i}
-              style={[
-                styles.tick,
-                {
-                  backgroundColor:
-                    hasValue && i <= value ? 'rgba(255,255,255,0.55)' : palette.textFaint,
-                  opacity: hasValue && i <= value ? 1 : 0.35,
-                },
-              ]}
-            />
-          ))}
-        </View>
+        {steps <= MAX_TICKS && (
+          <View style={styles.ticks} pointerEvents="none">
+            {Array.from({ length: steps }, (_, i) => {
+              const filled = hasValue && field.min + i <= value;
+              return (
+                <View
+                  key={i}
+                  style={[
+                    styles.tick,
+                    {
+                      backgroundColor: filled ? 'rgba(255,255,255,0.55)' : palette.textFaint,
+                      opacity: filled ? 1 : 0.35,
+                    },
+                  ]}
+                />
+              );
+            })}
+          </View>
+        )}
         {hasValue && width > 0 && (
           <View
             pointerEvents="none"
@@ -163,8 +171,8 @@ export function ScoreSlider({ value, onChange, tint, caption, minLabel, maxLabel
       </View>
 
       <View style={styles.labels}>
-        <Text style={[styles.label, { color: palette.textFaint }]}>{minLabel}</Text>
-        <Text style={[styles.label, { color: palette.textFaint }]}>{maxLabel}</Text>
+        <Text style={[styles.label, { color: palette.textFaint }]}>{field.minLabel}</Text>
+        <Text style={[styles.label, { color: palette.textFaint }]}>{field.maxLabel}</Text>
       </View>
     </View>
   );
@@ -181,7 +189,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   clearText: { fontSize: 13, fontWeight: '600' },
-  caption: { fontSize: 15, fontWeight: '600', marginTop: -spacing.xs },
   trackArea: { height: 44, justifyContent: 'center', marginTop: spacing.xs },
   track: { height: 12, borderRadius: radius.pill, overflow: 'hidden' },
   fill: { height: 12, borderRadius: radius.pill },

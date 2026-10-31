@@ -74,3 +74,19 @@ export function scoreColor(score: number, isDark: boolean): string {
   const idx = Math.round((clamped / 10) * (stops.length - 1));
   return stops[idx];
 }
+
+/**
+ * Categorical colours for charted fields.
+ *
+ * Indices 0 and 1 match `palette.mood` and `palette.fatigue`, so the starter
+ * form's chart looks exactly as it did when those two were hard-coded. The
+ * chart also alternates dash patterns, so the lines stay distinguishable
+ * without relying on colour alone.
+ */
+const SERIES_LIGHT = ['#5B6CFF', '#F2851F', '#1E9E6A', '#C2399B', '#1F8FBF', '#8A6FE8'];
+const SERIES_DARK = ['#8B98FF', '#FFA552', '#49D19C', '#F07CC8', '#5FC6EE', '#B29DFF'];
+
+export function seriesColor(index: number, isDark: boolean): string {
+  const stops = isDark ? SERIES_DARK : SERIES_LIGHT;
+  return stops[index % stops.length];
+}

@@ -1,51 +1,114 @@
+import type { Entry } from '../store/entries';
+import {
+  isBlank,
+  sliderGoodness,
+  type EntryValues,
+  type FormField,
+  type SliderField,
+} from '../forms';
 import { dayKey, dayKeysForRange, fromIso } from './dates';
-import type { MoodLog } from '../db/types';
 
-export type DayPoint = {
-  /** Local day key, e.g. "2026-10-15" */
-  day: string;
-  /** Index into the range, 0 = oldest day shown */
-  index: number;
-  mood: number | null;
-  fatigue: number | null;
-  logCount: number;
+/**
+ * Trend maths over a user-defined form.
+ *
+ * Nothing here knows about "mood" or "fatigue". Every slider in the form can
+ * be charted and summarised, and the non-slider kinds each get the summary
+ * that suits them — a yes/no field counts answers, a date field counts
+ * distinct moments, a word field reports its most-used words.
+ */
+
+export type ChartSeries = {
+  field: SliderField;
+  /** One entry per day in the range, oldest first. Null where nothing was logged. */
+  values: (number | null)[];
 };
 
-export type Summary = {
-  avgMood: number | null;
-  avgFatigue: number | null;
-  minMood: number | null;
-  maxMood: number | null;
-  daysLogged: number;
-  totalLogs: number;
-  exerciseYes: number;
-  exerciseAnswered: number;
-  lonelyMentions: number;
-  selfHarmMentions: number;
-  /** Distinct "last ate a vegetable" moments falling inside the window. */
-  vegetableEvents: number;
-  /** Distinct "last ate junk food" moments falling inside the window. */
-  junkFoodEvents: number;
-  /** Distinct "last had processed sugar" moments falling inside the window. */
-  processedSugarEvents: number;
-  /** Day-over-day mood direction across the window, comparing first and second half. */
-  moodTrend: number | null;
+export type DailyData = {
+  /** Local day keys, oldest first. */
+  days: string[];
+  /** Entries recorded on each day. */
+  counts: number[];
+  series: ChartSeries[];
 };
 
 function mean(values: number[]): number | null {
   if (values.length === 0) return null;
-  return values.reduce((sum, v) => sum + v, 0) / values.length;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 /**
- * Counts distinct timestamps that land on a day inside the window.
+ * Buckets entries into one point per local day, averaging within a day.
  *
- * The same moment can be re-recorded across several logs (the "Reuse" hint does
- * exactly that), and the moment itself can predate the window even when the log
- * is recent — so dedupe by value and filter on the recorded time, not the log.
+ * Days with no entry stay null rather than being interpolated, so the chart
+ * can break the line across a gap instead of inventing a value.
+ */
+export function buildDailyData(
+  entries: readonly Entry[],
+  sliders: readonly SliderField[],
+  days: number
+): DailyData {
+  const dayList = dayKeysForRange(days);
+  const index = new Map(dayList.map((day, i) => [day, i]));
+  const counts = dayList.map(() => 0);
+  const buckets = sliders.map(() => dayList.map((): number[] => []));
+
+  for (const entry of entries) {
+    const created = fromIso(entry.createdAt);
+    if (!created) continue;
+    const i = index.get(dayKey(created));
+    if (i === undefined) continue;
+
+    counts[i] += 1;
+    sliders.forEach((field, s) => {
+      const value = entry.values[field.id];
+      if (typeof value === 'number') buckets[s][i].push(value);
+    });
+  }
+
+  return {
+    days: dayList,
+    counts,
+    series: sliders.map((field, s) => ({
+      field,
+      values: buckets[s].map((values) => mean(values)),
+    })),
+  };
+}
+
+export type SliderSummary = {
+  field: SliderField;
+  average: number | null;
+  min: number | null;
+  max: number | null;
+  /** Raw change between the earlier and later half of the window. */
+  delta: number | null;
+  /** Whether `delta` is movement in the good direction, honouring `goodEnd`. */
+  improving: boolean | null;
+};
+
+export type HabitSummary =
+  | { kind: 'yesno'; field: FormField; yes: number; answered: number }
+  | { kind: 'datetime'; field: FormField; events: number }
+  | { kind: 'text'; field: FormField; entries: number }
+  | { kind: 'words'; field: FormField; top: { word: string; count: number }[] };
+
+export type Summary = {
+  totalEntries: number;
+  daysLogged: number;
+  sliders: SliderSummary[];
+  habits: HabitSummary[];
+};
+
+/**
+ * Counts distinct moments that land on a day inside the window.
+ *
+ * The same moment can be re-recorded across several entries (the "Reuse" hint
+ * does exactly that), and the moment itself can predate the window even when
+ * the entry is recent — so dedupe by value and filter on the recorded time,
+ * not the entry's.
  */
 function distinctEventsInWindow(
-  values: (string | null)[],
+  values: readonly (string | null)[],
   windowDays: Set<string>
 ): number {
   const seen = new Set<string>();
@@ -68,93 +131,146 @@ export function frequencyHint(count: number, days: number): string | null {
   return `≈ every ${Math.round(days / count)} days`;
 }
 
-/** Buckets logs into one point per local day, with nulls on days that have no score. */
-export function buildDailySeries(logs: MoodLog[], days: number): DayPoint[] {
-  const keys = dayKeysForRange(days);
-  const buckets = new Map<string, { mood: number[]; fatigue: number[]; count: number }>();
-  for (const key of keys) buckets.set(key, { mood: [], fatigue: [], count: 0 });
+function summarizeSlider(
+  field: SliderField,
+  entries: readonly Entry[],
+  series: ChartSeries | undefined
+): SliderSummary {
+  const values = entries
+    .map((entry) => entry.values[field.id])
+    .filter((value): value is number => typeof value === 'number');
 
-  for (const log of logs) {
-    const created = fromIso(log.createdAt);
-    if (!created) continue;
-    const bucket = buckets.get(dayKey(created));
-    if (!bucket) continue;
-    bucket.count += 1;
-    if (log.moodScore !== null) bucket.mood.push(log.moodScore);
-    if (log.fatigueScore !== null) bucket.fatigue.push(log.fatigueScore);
-  }
+  // The trend compares daily averages rather than raw entries, so a day with
+  // six logs does not outweigh a day with one.
+  const daily = (series?.values ?? []).filter((value): value is number => value !== null);
+  const half = Math.floor(daily.length / 2);
+  const earlier = mean(daily.slice(0, half));
+  const later = mean(daily.slice(half));
+  const enough = daily.length >= 4 && earlier !== null && later !== null;
 
-  return keys.map((day, index) => {
-    const bucket = buckets.get(day)!;
-    return {
-      day,
-      index,
-      mood: mean(bucket.mood),
-      fatigue: mean(bucket.fatigue),
-      logCount: bucket.count,
-    };
-  });
-}
-
-export function summarize(logs: MoodLog[], series: DayPoint[]): Summary {
-  const moods = logs.map((l) => l.moodScore).filter((v): v is number => v !== null);
-  const fatigues = logs.map((l) => l.fatigueScore).filter((v): v is number => v !== null);
-  const answered = logs.filter((l) => l.exercised !== null);
-  const windowDays = new Set(series.map((p) => p.day));
-
-  const withMood = series.filter((p) => p.mood !== null);
-  const half = Math.floor(withMood.length / 2);
-  const firstHalf = mean(withMood.slice(0, half).map((p) => p.mood!));
-  const secondHalf = mean(withMood.slice(half).map((p) => p.mood!));
-  const moodTrend =
-    firstHalf !== null && secondHalf !== null && withMood.length >= 4
-      ? secondHalf - firstHalf
-      : null;
+  const delta = enough ? later - earlier : null;
+  const improving =
+    delta === null
+      ? null
+      : field.goodEnd === 'high'
+        ? delta >= 0
+        : delta <= 0;
 
   return {
-    avgMood: mean(moods),
-    avgFatigue: mean(fatigues),
-    minMood: moods.length ? Math.min(...moods) : null,
-    maxMood: moods.length ? Math.max(...moods) : null,
-    daysLogged: series.filter((p) => p.logCount > 0).length,
-    totalLogs: logs.length,
-    exerciseYes: answered.filter((l) => l.exercised === 1).length,
-    exerciseAnswered: answered.length,
-    lonelyMentions: logs.filter((l) => l.lonelyAt !== null).length,
-    selfHarmMentions: logs.filter((l) => !!l.selfHarmThoughts?.trim()).length,
-    vegetableEvents: distinctEventsInWindow(
-      logs.map((l) => l.lastVegetableAt),
-      windowDays
-    ),
-    junkFoodEvents: distinctEventsInWindow(
-      logs.map((l) => l.lastJunkFoodAt),
-      windowDays
-    ),
-    processedSugarEvents: distinctEventsInWindow(
-      logs.map((l) => l.lastProcessedSugarAt),
-      windowDays
-    ),
-    moodTrend,
+    field,
+    average: mean(values),
+    min: values.length ? Math.min(...values) : null,
+    max: values.length ? Math.max(...values) : null,
+    delta,
+    improving,
+  };
+}
+
+function topWords(
+  entries: readonly Entry[],
+  fieldId: string
+): { word: string; count: number }[] {
+  const counts = new Map<string, { word: string; count: number }>();
+  for (const entry of entries) {
+    const value = entry.values[fieldId];
+    if (typeof value !== 'string' || !value.trim()) continue;
+    const key = value.trim().toLowerCase();
+    const existing = counts.get(key);
+    if (existing) existing.count += 1;
+    else counts.set(key, { word: value.trim(), count: 1 });
+  }
+  return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 3);
+}
+
+export function summarize(
+  fields: readonly FormField[],
+  entries: readonly Entry[],
+  data: DailyData
+): Summary {
+  const windowDays = new Set(data.days);
+  const seriesByField = new Map(data.series.map((item) => [item.field.id, item]));
+  const sliders: SliderSummary[] = [];
+  const habits: HabitSummary[] = [];
+
+  for (const field of fields) {
+    switch (field.kind) {
+      case 'slider':
+        sliders.push(summarizeSlider(field, entries, seriesByField.get(field.id)));
+        break;
+      case 'yesno': {
+        const answers = entries
+          .map((entry) => entry.values[field.id])
+          .filter((value): value is boolean => typeof value === 'boolean');
+        habits.push({
+          kind: 'yesno',
+          field,
+          yes: answers.filter(Boolean).length,
+          answered: answers.length,
+        });
+        break;
+      }
+      case 'datetime':
+        habits.push({
+          kind: 'datetime',
+          field,
+          events: distinctEventsInWindow(
+            entries.map((entry) => {
+              const value = entry.values[field.id];
+              return typeof value === 'string' ? value : null;
+            }),
+            windowDays
+          ),
+        });
+        break;
+      case 'text':
+        habits.push({
+          kind: 'text',
+          field,
+          entries: entries.filter((entry) => !isBlank(entry.values[field.id])).length,
+        });
+        break;
+      case 'words':
+        habits.push({ kind: 'words', field, top: topWords(entries, field.id) });
+        break;
+    }
+  }
+
+  return {
+    totalEntries: entries.length,
+    daysLogged: data.counts.filter((count) => count > 0).length,
+    sliders,
+    habits,
   };
 }
 
 /** Contiguous runs of non-null values, so the chart breaks the line across gaps. */
 export function segmentsOf(
-  series: DayPoint[],
-  pick: (point: DayPoint) => number | null
+  values: readonly (number | null)[]
 ): { index: number; value: number }[][] {
   const segments: { index: number; value: number }[][] = [];
   let current: { index: number; value: number }[] = [];
 
-  for (const point of series) {
-    const value = pick(point);
+  values.forEach((value, index) => {
     if (value === null) {
       if (current.length) segments.push(current);
       current = [];
     } else {
-      current.push({ index: point.index, value });
+      current.push({ index, value });
     }
-  }
+  });
   if (current.length) segments.push(current);
   return segments;
+}
+
+/** Normalized 0..1 position of a value where 1 is always the good end. */
+export function goodnessOf(field: SliderField, value: number): number {
+  return sliderGoodness(field, value);
+}
+
+/** True when nothing in `values` has been answered for any of `fields`. */
+export function hasAnyAnswer(
+  fields: readonly FormField[],
+  values: EntryValues
+): boolean {
+  return fields.some((field) => !isBlank(values[field.id]));
 }

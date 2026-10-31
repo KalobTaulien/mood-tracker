@@ -7,8 +7,9 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NotificationBootstrap } from '@/components/NotificationBootstrap';
-import { DATABASE_NAME, migrateDbIfNeeded } from '@/db';
+import { FormProvider } from '@/hooks/useForm';
 import { configureNotificationHandler } from '@/lib/notifications';
+import { DATABASE_NAME, migrateDbIfNeeded } from '@/store';
 import { useIsDark, usePalette } from '@/theme';
 
 configureNotificationHandler();
@@ -64,29 +65,34 @@ export default function RootLayout() {
             databaseName={DATABASE_NAME}
             onInit={migrateDbIfNeeded}
             useSuspense>
-            <NotificationBootstrap />
-            <Stack
-              screenOptions={{
-                headerStyle: { backgroundColor: palette.bg },
-                headerTitleStyle: { color: palette.text, fontWeight: '600' },
-                headerTintColor: palette.accent,
-                headerShadowVisible: false,
-                contentStyle: { backgroundColor: palette.bg },
-                // (tabs) has no title of its own, so iOS would label the back
-                // button with the raw route name. Detail screens open from
-                // several tabs, so stay generic rather than naming one.
-                headerBackTitle: 'Back',
-              }}>
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen
-                name="log/[id]"
-                options={{ title: 'Log details', presentation: 'card' }}
-              />
-              <Stack.Screen
-                name="settings"
-                options={{ title: 'Reminders', presentation: 'modal' }}
-              />
-            </Stack>
+            <FormProvider>
+              <NotificationBootstrap />
+              <Stack
+                screenOptions={{
+                  headerStyle: { backgroundColor: palette.bg },
+                  headerTitleStyle: { color: palette.text, fontWeight: '600' },
+                  headerTintColor: palette.accent,
+                  headerShadowVisible: false,
+                  contentStyle: { backgroundColor: palette.bg },
+                  // (tabs) has no title of its own, so iOS would label the back
+                  // button with the raw route name. Detail screens open from
+                  // several tabs, so stay generic rather than naming one.
+                  headerBackTitle: 'Back',
+                }}>
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="log/[id]" options={{ title: 'Log details' }} />
+                <Stack.Screen name="settings/index" options={{ title: 'Settings' }} />
+                <Stack.Screen name="settings/reminders" options={{ title: 'Reminders' }} />
+                <Stack.Screen
+                  name="settings/privacy"
+                  options={{ title: 'Privacy & data' }}
+                />
+                <Stack.Screen name="form/index" options={{ title: 'Your form' }} />
+                <Stack.Screen name="form/[fieldId]" options={{ title: 'Field' }} />
+                {/* Onboarding owns the whole screen: there is nowhere to go back to. */}
+                <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+              </Stack>
+            </FormProvider>
           </SQLiteProvider>
         </Suspense>
       </SafeAreaProvider>

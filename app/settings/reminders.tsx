@@ -18,7 +18,7 @@ import {
   SETTING_KEYS,
   setReminderTimes,
   setSetting,
-} from '@/db';
+} from '@/store';
 import {
   cancelLocalReminders,
   countLocalReminders,
@@ -59,6 +59,8 @@ export default function SettingsScreen() {
   }, [db]);
 
   useEffect(() => {
+    // Every setState inside refresh() runs after an await, not in this body.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
   }, [refresh]);
 

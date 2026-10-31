@@ -1,10 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
+import { useForm } from '@/hooks/useForm';
 import { usePalette } from '@/theme';
 
 export default function TabsLayout() {
   const palette = usePalette();
+  const { configured } = useForm();
+
+  // Null means the form document has not been read yet. Rendering nothing for
+  // that frame avoids flashing an empty Log tab before onboarding takes over.
+  if (configured === null) return null;
+  if (!configured) return <Redirect href="/onboarding" />;
 
   return (
     <Tabs

@@ -1,43 +1,43 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import type { MoodLog } from '../db/types';
+import {
+  leadFields,
+  sliderGoodness,
+  summaryTags,
+  type FormField,
+} from '../forms';
 import { formatTime } from '../lib/dates';
 import { radius, scoreColor, spacing, useIsDark, usePalette } from '../theme';
+import type { Entry } from '../store';
 
 type Props = {
-  log: MoodLog;
+  entry: Entry;
+  fields: readonly FormField[];
   onPress: () => void;
 };
 
-/** Compact tags summarising which optional fields this log actually carries. */
-function tagsFor(log: MoodLog): string[] {
-  const tags: string[] = [];
-  const fatigueWord = log.fatigueWord?.trim().toLowerCase();
-  if (log.fatigueScore !== null) {
-    tags.push(
-      fatigueWord
-        ? `fatigue ${log.fatigueScore} · ${fatigueWord}`
-        : `fatigue ${log.fatigueScore}`
-    );
-  } else if (fatigueWord) {
-    tags.push(fatigueWord);
-  }
-  if (log.exercised === 1) tags.push('exercised');
-  if (log.exercised === 0) tags.push('no exercise');
-  if (log.lonelyAt) tags.push('loneliness');
-  if (log.selfHarmThoughts?.trim()) tags.push('self-harm note');
-  if (log.lastVegetableAt) tags.push('veg');
-  if (log.lastJunkFoodAt) tags.push('junk food');
-  if (log.lastProcessedSugarAt) tags.push('sugar');
-  return tags;
-}
-
-export function LogRow({ log, onPress }: Props) {
+export function LogRow({ entry, fields, onPress }: Props) {
   const palette = usePalette();
   const isDark = useIsDark();
-  const hasMood = log.moodScore !== null;
-  const tint = hasMood ? scoreColor(log.moodScore!, isDark) : palette.textFaint;
-  const tags = tagsFor(log);
+
+  const { slider, headline } = leadFields(fields);
+  const score = slider ? entry.values[slider.id] : undefined;
+  const hasScore = slider !== null && typeof score === 'number';
+  const tint = hasScore
+    ? scoreColor(sliderGoodness(slider, score as number) * 10, isDark)
+    : palette.textFaint;
+
+  const headlineValue = headline ? entry.values[headline.id] : undefined;
+  const headlineText =
+    typeof headlineValue === 'string' && headlineValue.trim()
+      ? headlineValue.trim()
+      : hasScore
+        ? 'No word'
+        : 'Notes only';
+
+  const tags = summaryTags(fields, entry.values, {
+    skipFieldIds: [slider?.id, headline?.id].filter((id): id is string => !!id),
+  });
 
   return (
     <Pressable
@@ -50,19 +50,19 @@ export function LogRow({ log, onPress }: Props) {
           opacity: pressed ? 0.75 : 1,
         },
       ]}>
-      <View style={[styles.score, { backgroundColor: hasMood ? tint : palette.cardAlt }]}>
-        <Text style={[styles.scoreText, { color: hasMood ? '#FFFFFF' : palette.textFaint }]}>
-          {hasMood ? log.moodScore : '–'}
+      <View style={[styles.score, { backgroundColor: hasScore ? tint : palette.cardAlt }]}>
+        <Text style={[styles.scoreText, { color: hasScore ? '#FFFFFF' : palette.textFaint }]}>
+          {hasScore ? String(score) : '–'}
         </Text>
       </View>
 
       <View style={styles.body}>
         <View style={styles.titleRow}>
           <Text style={[styles.word, { color: palette.text }]} numberOfLines={1}>
-            {log.moodWord?.trim() || (hasMood ? 'No word' : 'Notes only')}
+            {headlineText}
           </Text>
           <Text style={[styles.time, { color: palette.textFaint }]}>
-            {formatTime(log.createdAt)}
+            {formatTime(entry.createdAt)}
           </Text>
         </View>
         {tags.length > 0 && (

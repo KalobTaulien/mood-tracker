@@ -3,9 +3,9 @@ import DateTimePicker, {
 } from '@react-native-community/datetimepicker';
 import { useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { formatDateTime, relativeFromNow } from '../lib/dates';
-import { radius, spacing, useIsDark, usePalette } from '../theme';
-import { Chip } from './Chip';
+import { formatDateTime, relativeFromNow } from '../../lib/dates';
+import { radius, spacing, useIsDark, usePalette } from '../../theme';
+import { Chip } from '../Chip';
 
 type Props = {
   value: string | null;
@@ -26,7 +26,7 @@ function daysAgo(days: number): Date {
   return d;
 }
 
-export function DateTimeField({ value, onChange, emptyLabel = 'Pick a date & time' }: Props) {
+export function MomentInput({ value, onChange, emptyLabel = 'Pick a date & time' }: Props) {
   const palette = usePalette();
   const isDark = useIsDark();
   const [iosPickerOpen, setIosPickerOpen] = useState(false);

@@ -1,6 +1,6 @@
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useRef } from 'react';
-import { getReminderTimes, getSetting, SETTING_KEYS } from '../db/settings';
+import { getReminderTimes, getSetting, SETTING_KEYS } from '../store';
 import { setUpNotifications } from '../lib/notifications';
 
 /**
