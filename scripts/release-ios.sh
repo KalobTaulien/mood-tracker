@@ -32,18 +32,32 @@ fi
 echo "Mood Tracker $version (build $build)"
 echo
 
-# Fail early with an explanation rather than deep inside xcodebuild.
+# Warn, but do not block. A missing distribution certificate has two very
+# different causes, and only one of them is fatal:
+#
+#   - Paid membership, certificate not created yet. The
+#     -allowProvisioningUpdates flag below creates it, so stopping here would
+#     prevent the very thing that fixes the problem.
+#   - Free account. Apple will not issue a distribution certificate at all,
+#     and xcodebuild fails later with its own error.
+#
+# Since this script cannot tell the two apart, it explains the likely cause
+# and lets xcodebuild be the authority.
 if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "Apple Distribution"; then
-  echo "error: no 'Apple Distribution' certificate found in your keychain." >&2
-  echo >&2
-  echo "       App Store signing needs a paid Apple Developer Program" >&2
-  echo "       membership. Once enrolled, sign in under Xcode > Settings >" >&2
-  echo "       Accounts and the -allowProvisioningUpdates flag below will" >&2
-  echo "       create the certificate and profile for you." >&2
-  echo >&2
-  echo "       Current identities:" >&2
-  security find-identity -v -p codesigning 2>/dev/null | sed 's/^/       /' >&2
-  exit 1
+  echo "note: no 'Apple Distribution' certificate in your keychain yet."
+  echo
+  echo "      Continuing anyway — -allowProvisioningUpdates can create one if"
+  echo "      your Apple ID has a paid Developer Program membership. If it"
+  echo "      does not, xcodebuild will fail at the signing step, and the"
+  echo "      membership is what you are missing."
+  echo
+  echo "      To check: Xcode > Settings > Apple Accounts > Manage"
+  echo "      Certificates... > + . If 'Apple Distribution' is offered, you"
+  echo "      are on a paid account; a free one only offers development certs."
+  echo
+  echo "      Current identities:"
+  security find-identity -v -p codesigning 2>/dev/null | sed 's/^/      /'
+  echo
 fi
 
 echo "==> Regenerating ios/ from app.json"

@@ -430,15 +430,25 @@ is needed; `expo prebuild` only regenerates `ios/` from `app.json`.
 
 ### You need a paid Apple Developer Program membership
 
-App Store signing requires an **Apple Distribution** certificate, which the
-free tier cannot issue — it only grants "Apple Development". The script checks
-for this first and exits with an explanation rather than failing several
-minutes later inside `xcodebuild`.
+App Store signing requires an **Apple Distribution** certificate, which a free
+account cannot issue — it only grants "Apple Development".
 
-Once enrolled, sign in under **Xcode › Settings › Accounts**. The
-`-allowProvisioningUpdates` flag creates the certificate and provisioning
-profile for you, which is far less painful than doing it by hand in the
-developer portal.
+If you have never created one, that is usually fine: `-allowProvisioningUpdates`
+makes `xcodebuild` create the certificate *and* the provisioning profile on
+demand, using the Apple ID signed into **Xcode › Settings › Apple Accounts**.
+That is far less painful than doing it by hand in the developer portal. The
+script notes the missing certificate and continues, because stopping would
+prevent the very thing that fixes it.
+
+To tell a paid account from a free one: **Xcode › Settings › Apple Accounts ›
+Manage Certificates… › +**. If **Apple Distribution** is on the menu you are
+on a paid membership; a free account offers only development certificates. A
+paid team also shows a **Role** and a "Certificates, Identifiers & Profiles"
+row, where a free one is labelled "Personal Team".
+
+Note that `-allowProvisioningUpdates` is an `xcodebuild` command-line flag,
+already included in `scripts/release-ios.sh` — it is not a setting anywhere in
+the Xcode UI.
 
 ### Bump the build number for every upload
 
