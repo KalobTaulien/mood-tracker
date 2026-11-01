@@ -10,6 +10,7 @@
     "ios": {
       "bundleIdentifier": "com.kalobtaulien.moodtracker",
       "buildNumber": "1",
+      "appleTeamId": "5U74YS7399",
       "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false

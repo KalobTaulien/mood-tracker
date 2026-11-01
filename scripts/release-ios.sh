@@ -63,6 +63,17 @@ fi
 echo "==> Regenerating ios/ from app.json"
 npx expo prebuild --platform ios --clean
 
+# Keep DerivedData inside the project.
+#
+# Without this, xcodebuild uses the shared ~/Library/Developer/Xcode/DerivedData,
+# which it also shares with the Xcode GUI and with every earlier run. Because
+# prebuild --clean rebuilds Pods from scratch each time, a build description
+# cached there can outlive the Pods tree it describes and the archive fails
+# with "Unable to load contents of file list: ...xcfilelist" — files that are
+# sitting right there on disk. A per-project path cannot go stale that way,
+# and `rm -rf ios` resets everything in one step.
+DERIVED="$ROOT/ios/build/DerivedData"
+
 echo "==> Archiving for device"
 rm -rf "$ARCHIVE"
 xcodebuild archive \
@@ -71,6 +82,7 @@ xcodebuild archive \
   -configuration Release \
   -sdk iphoneos \
   -archivePath "$ARCHIVE" \
+  -derivedDataPath "$DERIVED" \
   -allowProvisioningUpdates
 
 echo "==> Exporting .ipa"

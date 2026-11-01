@@ -450,6 +450,31 @@ Note that `-allowProvisioningUpdates` is an `xcodebuild` command-line flag,
 already included in `scripts/release-ios.sh` — it is not a setting anywhere in
 the Xcode UI.
 
+### Two failures worth recognising
+
+**`Signing for "MoodTracker" requires a development team.`**
+
+`expo.ios.appleTeamId` is missing from `app.json`. `-allowProvisioningUpdates`
+can create certificates and profiles, but it still has to be told which team
+to create them under, and prebuild leaves `DEVELOPMENT_TEAM` empty without it.
+Your team ID is the `OU` field of any Apple certificate you hold — not the
+value in parentheses after your name, which is the certificate's own ID:
+
+```bash
+security find-certificate -c "Apple Development" -p \
+  | openssl x509 -noout -subject -nameopt multiline
+```
+
+**`Unable to load contents of file list: ...xcfilelist`** — for files that are
+plainly on disk.
+
+Stale DerivedData. `prebuild --clean` rebuilds `ios/Pods` from scratch, so a
+build description cached in the shared
+`~/Library/Developer/Xcode/DerivedData` can outlive the Pods tree it
+describes. The release script passes `-derivedDataPath ios/build/DerivedData`
+so its cache lives and dies with the project. If you hit this from the Xcode
+GUI, delete the project's folder under the shared DerivedData directory.
+
 ### Bump the build number for every upload
 
 App Store Connect rejects a duplicate build number for the same version, and
