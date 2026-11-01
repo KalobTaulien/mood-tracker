@@ -471,9 +471,26 @@ plainly on disk.
 Stale DerivedData. `prebuild --clean` rebuilds `ios/Pods` from scratch, so a
 build description cached in the shared
 `~/Library/Developer/Xcode/DerivedData` can outlive the Pods tree it
-describes. The release script passes `-derivedDataPath ios/build/DerivedData`
-so its cache lives and dies with the project. If you hit this from the Xcode
-GUI, delete the project's folder under the shared DerivedData directory.
+describes. The release script uses a private `build/DerivedData` and empties
+it before each archive. If you hit this from the Xcode GUI instead, delete
+the project's folder under the shared DerivedData directory.
+
+### Where build output goes
+
+Everything the release produces lands in `/build` at the repo root — archive,
+DerivedData, and the exported `.ipa` — and `/build` is gitignored. It is
+deliberately *not* under `ios/`, because `prebuild --clean` deletes `ios/`
+wholesale on every run: a multi-gigabyte DerivedData tree there would be
+re-deleted each release, and the delete fails outright with `ENOTEMPTY` if
+Xcode still holds a file open.
+
+### Version bumping stays manual
+
+`build.production.autoIncrement` is `false`. With the `local` version source,
+Expo's Xcode build phases will otherwise rewrite `expo.ios.buildNumber` in
+`app.json` during an archive, so a release silently dirties your working tree
+and the number you shipped is not the number you committed. Bump it yourself;
+the script reminds you each run.
 
 ### Bump the build number for every upload
 

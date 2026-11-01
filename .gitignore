@@ -40,6 +40,9 @@ yarn-error.*
 /ios
 /android
 
+# release artifacts: archive, DerivedData, and the exported .ipa
+/build
+
 # Local secrets / env
 .env
 .env.local
@@ -54,3 +57,12 @@ yarn-error.*
 
 # Project-local Expo access token (personal account)
 .env.eas
+
+# Journal data. This repo is public and the in-app backup export writes
+# mood-tracker-backup-<date>.json containing every entry someone has ever
+# written — including the self-harm field. The share sheet makes saving one
+# into a project folder a single tap, so refuse to track them at all.
+mood-tracker-backup*.json
+*.db
+*.sqlite
+*.sqlite3

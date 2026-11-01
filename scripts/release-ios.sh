@@ -16,8 +16,15 @@ set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
-ARCHIVE="$ROOT/ios/build/MoodTracker.xcarchive"
-IPA_DIR="$ROOT/ios/build/ipa"
+# Build outputs live at the repo root, deliberately NOT under ios/.
+# `expo prebuild --clean` deletes ios/ wholesale, so anything kept there is
+# re-deleted on every release — slow for a multi-gigabyte DerivedData tree,
+# and it fails outright with ENOTEMPTY while Xcode still holds files open.
+# Keeping them here also means the .ipa you just built survives the next run.
+OUT="$ROOT/build"
+ARCHIVE="$OUT/MoodTracker.xcarchive"
+IPA_DIR="$OUT/ipa"
+DERIVED="$OUT/DerivedData"
 
 version=$(node -p "require('./app.json').expo.version")
 build=$(node -p "require('./app.json').expo.ios.buildNumber ?? ''")
@@ -63,19 +70,17 @@ fi
 echo "==> Regenerating ios/ from app.json"
 npx expo prebuild --platform ios --clean
 
-# Keep DerivedData inside the project.
+# Discard DerivedData before archiving.
 #
-# Without this, xcodebuild uses the shared ~/Library/Developer/Xcode/DerivedData,
-# which it also shares with the Xcode GUI and with every earlier run. Because
-# prebuild --clean rebuilds Pods from scratch each time, a build description
-# cached there can outlive the Pods tree it describes and the archive fails
-# with "Unable to load contents of file list: ...xcfilelist" — files that are
-# sitting right there on disk. A per-project path cannot go stale that way,
-# and `rm -rf ios` resets everything in one step.
-DERIVED="$ROOT/ios/build/DerivedData"
-
+# xcodebuild otherwise uses the shared ~/Library/Developer/Xcode/DerivedData,
+# which it also shares with the Xcode GUI and every earlier run. Since the
+# prebuild above rebuilds ios/Pods from scratch, a build description cached
+# there outlives the Pods tree it describes, and the archive fails with
+# "Unable to load contents of file list: ...xcfilelist" naming files that are
+# sitting right there on disk. A private, freshly emptied path cannot go
+# stale that way.
 echo "==> Archiving for device"
-rm -rf "$ARCHIVE"
+rm -rf "$ARCHIVE" "$DERIVED"
 xcodebuild archive \
   -workspace ios/MoodTracker.xcworkspace \
   -scheme MoodTracker \
