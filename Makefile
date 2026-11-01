@@ -89,6 +89,9 @@ sim: ## Release build installed and launched on the simulator (no Metro needed)
 	xcrun simctl install "$(SIM)" "$(APP_PATH)"
 	xcrun simctl launch "$(SIM)" "$(BUNDLE_ID)"
 
+seed: ## Fill the simulator with 60 days of plausible history (replaces existing entries)
+	npm run seed
+
 ipa: ## Signed .ipa in build/ipa/ for Apple's Transporter app
 	npm run release:ios
 
@@ -120,5 +123,5 @@ clean-native: clean ## Also delete the generated ios/ directory
 	rm -rf ios
 
 .PHONY: help install start ios device android check typecheck lint check-store \
-	doctor prebuild sim ipa release build_ios submit_ios workflow whoami \
+	doctor prebuild sim seed ipa release build_ios submit_ios workflow whoami \
 	logo clean clean-native

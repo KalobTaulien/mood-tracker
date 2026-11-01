@@ -62,6 +62,7 @@ npm run ios:device   # build + run on a physical iPhone over USB
 npm run typecheck    # tsc --noEmit
 npm run lint         # eslint
 npm run check:store  # storage, migration and backup checks
+npm run seed         # fill the simulator with plausible history
 npm run release:ios  # signed .ipa for Transporter (see Releasing, below)
 ```
 
@@ -413,6 +414,32 @@ local signing setup, or to install on a device over the air.
 npm run eas -- whoami        # this project (personal, via .env.eas)
 npx eas-cli whoami           # global login (caitcommittee)
 ```
+
+## Seeding the simulator
+
+History and Trends are hard to judge against three hand-typed entries.
+
+```bash
+npm run seed                       # 60 days into the booted simulator
+npm run seed -- --days 120 --seed 7
+npm run seed -- --keep             # add to existing entries rather than replacing
+```
+
+This writes straight into the app's SQLite file instead of adding a "populate"
+button to the app, so no seeding code can ever ship: there is no dev-only
+branch to misconfigure, and the Release build already on the simulator needs
+no rebuild to pick it up. Simulator only — it finds the container through
+`xcrun simctl`, which has no equivalent for a physical device.
+
+The form definition is imported from `src/forms` rather than hand-copied, so
+generated answers always match the real starter form, including the per-score
+word lists. Output is deterministic: the same `--seed` produces the same
+journal, which makes a screenshot reproducible.
+
+The data is shaped to look lived-in rather than uniform — mood drifts on a
+slow random walk, fatigue tracks loosely against it, about one day in seven
+has nothing logged, and the self-harm field is populated rarely and with
+deliberately mild wording.
 
 ## Releasing to the App Store
 

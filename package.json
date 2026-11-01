@@ -47,6 +47,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint app src",
     "check:store": "node scripts/check-store.mjs",
+    "seed": "node scripts/seed-simulator.mjs",
     "release:ios": "sh scripts/release-ios.sh",
     "eas": "sh scripts/eas.sh"
   },
